@@ -48,7 +48,6 @@ export default function AvailabilityCalendar({
   const [memberExternalEvents, setMemberExternalEvents] = useState<{ user_id: string; date: string; }[]>([]);
   const [bandNotAvailableDates, setBandNotAvailableDates] = useState<Date[]>([]);
   const { user } = useAuthStore();
-  const [currentMonth, setCurrentMonth] = useState(new Date());
 
 useEffect(() => {
   if (user) {
@@ -538,10 +537,6 @@ useEffect(() => {
     );
   };
 
-  const handleMonthChange = (month: Date) => {
-    setCurrentMonth(month);
-  };
-
   if (loading) {
     return (
       <div className="flex justify-center items-center py-8">
@@ -589,8 +584,6 @@ useEffect(() => {
           onSelect={setSelectedDay}
           onDayClick={handleDayClick}
           fromDate={new Date()}
-          month={currentMonth}
-          onMonthChange={handleMonthChange}
           components={{
             DayContent
           }}
