@@ -153,60 +153,22 @@ export default function MemberAvailability({
         </div>
 
         <div className="p-6">
-          {selectedDays.length === 0 && !canManageAvailability ? (
+          {loading ? (
             <div className="text-center py-8 text-gray-500">
-              <Calendar className="w-12 h-12 mx-auto mb-2 text-gray-400" />
-              <p>No dates available yet</p>
+              Cargando disponibilidad...
             </div>
           ) : (
-            <div className="space-y-4">
-              <style>
-                {`
-                  .rdp {
-                    --rdp-cell-size: 40px;
-                    --rdp-accent-color: rgb(79 70 229);
-                    --rdp-background-color: rgb(238 242 255);
-                    margin: 0;
-                  }
-                  .rdp-day_selected:not([disabled]) { 
-                    background-color: var(--rdp-accent-color);
-                    color: white;
-                  }
-                  .rdp-day_selected:hover:not([disabled]) { 
-                    background-color: var(--rdp-accent-color);
-                    opacity: 0.8;
-                  }
-                `}
-              </style>
-              <div className="flex justify-center">
-                <DayPicker
-                  mode="multiple"
-                  selected={selectedDays}
-                  onDayClick={canManageAvailability ? handleDayClick : undefined}
-                  footer={footer}
-                  fromDate={new Date()}
-                  modifiersClassNames={{
-                    selected: 'bg-indigo-600 text-white hover:bg-indigo-700',
-                  }}
-                  disabled={!canManageAvailability}
-                />
-              </div>
-              {!canManageAvailability && selectedDays.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  <h3 className="font-medium text-gray-900">Available Dates:</h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    {selectedDays.sort((a, b) => a.getTime() - b.getTime()).map((day, index) => (
-                      <div
-                        key={index}
-                        className="p-2 bg-gray-50 rounded-lg text-sm text-gray-700"
-                      >
-                        {format(day, 'PPP')}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            <DayPicker
+              mode="multiple"
+              selected={selectedDays}
+              onDayClick={canManageAvailability ? handleDayClick : undefined}
+              footer={footer}
+              fromDate={new Date()}
+              modifiersClassNames={{
+                selected: 'bg-indigo-600 text-white hover:bg-indigo-700',
+              }}
+              disabled={!canManageAvailability}
+            />
           )}
         </div>
       </div>

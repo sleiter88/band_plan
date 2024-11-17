@@ -38,7 +38,7 @@ export default function AvailabilityCalendar({
   const { id: bandId } = useParams<{ id: string }>();
   const [availabilities, setAvailabilities] = useState<MemberAvailability[]>([]);
   const [selectedDay, setSelectedDay] = useState<Date | undefined>(undefined);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -48,6 +48,7 @@ export default function AvailabilityCalendar({
   const [memberExternalEvents, setMemberExternalEvents] = useState<{ user_id: string; date: string; }[]>([]);
   const [bandNotAvailableDates, setBandNotAvailableDates] = useState<Date[]>([]);
   const { user } = useAuthStore();
+  const [selectedDays, setSelectedDays] = useState<Date[]>([]);
 
 useEffect(() => {
   if (user) {
@@ -68,6 +69,15 @@ useEffect(() => {
       onAvailableDatesChange(bandAvailableDates);
     }
   }, [bandAvailableDates, onAvailableDatesChange]);
+
+  useEffect(() => {
+    if (availabilities.length > 0) {
+      const days = availabilities.map(a => new Date(a.date));
+      setSelectedDays(days);
+    } else {
+      setSelectedDays([]);
+    }
+  }, [availabilities]);
 
   const checkAdminStatus = async () => {
     const userData = await safeSupabaseRequest(
