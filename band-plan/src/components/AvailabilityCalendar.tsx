@@ -336,12 +336,21 @@ useEffect(() => {
     setBandNotAvailableDates(notAvailableDates);
   };
 
+  const canManageOtherMembers = () => {
+    const currentMember = members.find(m => m.user_id === user?.id);
+    return isAdmin || currentMember?.role_in_band === 'principal';
+  };
+
   const handleDayClick = async (day: Date) => {
     if (!user) return;
 
-    const canManage = isAdmin || members.some(m => m.user_id === user.id);
+    const currentMember = members.find(m => m.user_id === user.id);
+    const canManage = isAdmin || 
+      currentMember?.role_in_band === 'principal' || 
+      user.id === (selectedMemberId || user.id);
+
     if (!canManage) {
-      toast.error('Solo puedes gestionar tu propia disponibilidad');
+      toast.error('No tienes permisos para gestionar esta disponibilidad');
       return;
     }
 
@@ -565,10 +574,10 @@ useEffect(() => {
 
   return (
     <div className="space-y-6">
-      {isAdmin && members.length > 0 && (
+      {(isAdmin || canManageOtherMembers()) && members.length > 0 && (
         <div>
           <label htmlFor="member-select" className="block text-sm font-medium text-gray-700 mb-2">
-            Managing availability for:
+            Gestionando disponibilidad para:
           </label>
           <div className="relative w-full max-w-xs">
             <select
@@ -579,7 +588,7 @@ useEffect(() => {
             >
               {members.map((member) => (
                 <option key={member.id} value={member.user_id}>
-                  {member.name} {member.user_id === user?.id ? '(You)' : ''}
+                  {member.name} {member.user_id === user?.id ? '(Tú)' : ''}
                 </option>
               ))}
             </select>
