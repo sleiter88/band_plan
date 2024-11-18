@@ -339,25 +339,24 @@ useEffect(() => {
   const handleDayClick = async (day: Date) => {
     if (!user) return;
 
-  const canManage = isAdmin || members.some(m => m.user_id === user.id);
-  if (!canManage) {
-    toast.error('Solo puedes gestionar tu propia disponibilidad');
-    return;
-  }
+    const canManage = isAdmin || members.some(m => m.user_id === user.id);
+    if (!canManage) {
+      toast.error('Solo puedes gestionar tu propia disponibilidad');
+      return;
+    }
 
-  const userId = selectedMemberId || user.id;
+    const userId = selectedMemberId || user.id;
 
-  // Verificar si el usuario tiene un evento en esta fecha
-  const hasEventOnDate = memberEvents.some(event => 
-    event.user_id === userId &&
-    isSameDay(new Date(event.date), day)
-  );
+    const hasEventOnDate = memberEvents.some(event => 
+      event.user_id === userId &&
+      isSameDay(new Date(event.date), day)
+    );
 
-  if (hasEventOnDate) {
-    toast.error('No puedes cambiar tu disponibilidad en fechas con eventos programados');
-    return;
-  }
-  
+    if (hasEventOnDate) {
+      toast.error('No puedes cambiar tu disponibilidad en fechas con eventos programados');
+      return;
+    }
+    
     setSaving(true);
     try {
       const currentMember = members.find(m => m.user_id === userId);
@@ -381,6 +380,17 @@ useEffect(() => {
             .eq('date', dateStr),
           'Error al actualizar la disponibilidad'
         );
+
+        // Actualizar el estado local sin hacer fetch
+        setAvailabilities(prev => prev.map(avail => {
+          if (avail.userId === currentMember.user_id) {
+            return {
+              ...avail,
+              dates: avail.dates.filter(d => !isSameDay(d, day))
+            };
+          }
+          return avail;
+        }));
       } else {
         await safeSupabaseRequest(
           () => supabase
@@ -388,14 +398,22 @@ useEffect(() => {
             .insert([{ user_id: currentMember.user_id, date: dateStr }]),
           'Error al actualizar la disponibilidad'
         );
+
+        // Actualizar el estado local sin hacer fetch
+        setAvailabilities(prev => prev.map(avail => {
+          if (avail.userId === currentMember.user_id) {
+            return {
+              ...avail,
+              dates: [...avail.dates, day]
+            };
+          }
+          return avail;
+        }));
       }
-  
-      await fetchAllAvailabilities();
     } finally {
       setSaving(false);
     }
   };
-  
 
   const getAvailableMembersForDay = (date: Date) => {
     return members.filter(member => 
