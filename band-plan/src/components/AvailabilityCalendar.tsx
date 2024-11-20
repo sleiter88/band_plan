@@ -9,6 +9,7 @@ import { Calendar, Loader2, ChevronDown, Music, Download } from 'lucide-react';
 import 'react-day-picker/dist/style.css';
 import { BandMember } from '../types';
 import { useParams } from 'react-router-dom';
+import { es } from 'date-fns/locale';
 
 interface MemberAvailability {
   userId: string;
@@ -557,31 +558,62 @@ useEffect(() => {
   };
 
   const downloadAvailabilityDates = () => {
-    let content = "FECHAS DISPONIBLES DE LA BANDA\n\n";
-    
-    // Filtrar fechas disponibles que no tienen eventos
-    const availableDatesWithoutEvents = bandAvailableDates.filter(date => {
-      const eventsOnDate = getEventsForDate(date);
-      return eventsOnDate.length === 0;
-    });
+    // Filtrar fechas disponibles sin eventos
+    const availableDatesWithoutEvents = bandAvailableDates
+      .filter(date => getEventsForDate(date).length === 0)
+      .sort((a, b) => a.getTime() - b.getTime());
 
-    // Ordenar fechas cronológicamente
-    availableDatesWithoutEvents
-      .sort((a, b) => a.getTime() - b.getTime())
-      .forEach(date => {
-        content += `${format(date, 'dd/MM/yyyy')}\n`;
-        const membersForDay = getMembersForDay(date);
-        content += "Miembros disponibles:\n";
-        membersForDay.forEach(member => {
-          const instruments = member.instruments.map(i => i.name).join(", ");
-          content += `- ${member.name} (${member.role_in_band}) - ${instruments}\n`;
-        });
+    // Agrupar fechas por mes
+    const datesByMonth = availableDatesWithoutEvents.reduce((acc, date) => {
+      const monthKey = format(date, 'MMMM yyyy', { locale: es });
+      if (!acc[monthKey]) {
+        acc[monthKey] = {
+          withPrincipals: [],
+          withSubstitutes: []
+        };
+      }
+
+      const membersForDay = getMembersForDay(date);
+      const unavailablePrincipals = members
+        .filter(m => m.role_in_band === 'principal')
+        .filter(principal => !membersForDay.some(m => m.user_id === principal.user_id));
+
+      if (unavailablePrincipals.length === 0) {
+        acc[monthKey].withPrincipals.push(date);
+      } else {
+        acc[monthKey].withSubstitutes.push(date);
+      }
+
+      return acc;
+    }, {} as Record<string, { withPrincipals: Date[], withSubstitutes: Date[] }>);
+
+    // Generar el contenido del archivo
+    let content = "FECHAS DISPONIBLES DE LA BANDA\n\n";
+
+    if (Object.keys(datesByMonth).length === 0) {
+      content += "No hay fechas disponibles sin eventos programados.\n";
+    } else {
+      Object.entries(datesByMonth).forEach(([month, dates]) => {
+        content += `${month.toUpperCase()}\n`;
+        
+        if (dates.withPrincipals.length > 0) {
+          content += "Fechas con miembros principales:\n";
+          content += dates.withPrincipals
+            .map(date => `${format(date, 'd(EEE)', { locale: es })}`)
+            .join(', ');
+          content += "\n\n";
+        }
+
+        if (dates.withSubstitutes.length > 0) {
+          content += "Fechas con sustitutos:\n";
+          content += dates.withSubstitutes
+            .map(date => `${format(date, 'd(EEE)', { locale: es })}`)
+            .join(', ');
+          content += "\n\n";
+        }
+        
         content += "\n";
       });
-
-    // Agregar mensaje si no hay fechas disponibles
-    if (availableDatesWithoutEvents.length === 0) {
-      content += "No hay fechas disponibles sin eventos programados.\n";
     }
 
     // Crear y descargar el archivo
