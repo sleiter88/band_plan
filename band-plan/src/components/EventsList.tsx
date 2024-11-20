@@ -141,6 +141,42 @@ export default function EventsList({
     return Object.entries(grouped);
   };
 
+  const renderEventMembers = (event: EventWithMembers) => {
+    const principalMembers = event.members.filter(m => m.role_in_band === 'principal');
+    const substituteMembers = event.members.filter(m => m.role_in_band === 'sustituto');
+
+    return (
+      <div className="mt-1.5 space-y-1">
+        {/* Miembros Principales */}
+        <div className="flex flex-wrap gap-1">
+          {principalMembers.map((member) => (
+            <span
+              key={member.band_member_id}
+              className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700"
+            >
+              {member.member_name}
+            </span>
+          ))}
+        </div>
+
+        {/* Sustitutos */}
+        {substituteMembers.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            <span className="text-xs text-gray-500 mr-1">Sustitutos:</span>
+            {substituteMembers.map((member) => (
+              <span
+                key={member.band_member_id}
+                className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-50 text-yellow-700"
+              >
+                {member.member_name}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-lg shadow-sm border border-gray-100">
@@ -203,20 +239,7 @@ export default function EventsList({
                                   </div>
                                 </div>
                               </div>
-                              <div className="mt-1.5 flex flex-wrap gap-1">
-                                {event.members.map((member) => (
-                                  <span
-                                    key={member.band_member_id}
-                                    className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
-                                      member.role_in_band === 'principal'
-                                        ? 'bg-indigo-50 text-indigo-700'
-                                        : 'bg-yellow-50 text-yellow-700'
-                                    }`}
-                                  >
-                                    {member.member_name}
-                                  </span>
-                                ))}
-                              </div>
+                              {renderEventMembers(event)}
                               {event.notes && (
                                 <p className="mt-1 text-xs text-gray-500 line-clamp-1">
                                   {event.notes}

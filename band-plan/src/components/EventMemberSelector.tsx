@@ -21,7 +21,7 @@ export default function EventMemberSelector({
   validationError
 }: EventMemberSelectorProps) {
   // Group members by role
-  const principalMembers = selectedMembers.filter(m => {
+    const principalMembers = selectedMembers.filter(m => {
     const member = members.find(bm => bm.id === m.memberId);
     return member?.role_in_band === 'principal';
   });

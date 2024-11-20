@@ -67,6 +67,7 @@ export default function EventModal({
     if (!event) return;
 
     try {
+      // Obtener miembros actuales del evento
       const eventMembers = await safeSupabaseRequest(
         () => supabase
           .from('event_members')
@@ -75,17 +76,52 @@ export default function EventModal({
         'Error loading event members'
       );
 
+      // Obtener disponibilidades para la fecha del evento
+      const availabilityData = await safeSupabaseRequest(
+        () => supabase
+          .from('member_availability')
+          .select('user_id')
+          .eq('date', event.date),
+        'Error loading member availability'
+      );
+
+      // Obtener eventos externos para la fecha
+      const externalEventsData = await safeSupabaseRequest(
+        () => supabase
+          .from('events')
+          .select(`
+            date,
+            event_members (
+              user_id
+            )
+          `)
+          .neq('band_id', bandId)
+          .eq('date', event.date),
+        'Error loading external events'
+      );
+
       if (eventMembers) {
-        // Get available members for the event date
-        const availableMembers = getAvailableMembersForDate(event.date);
+        const availableUserIds = new Set(availabilityData?.map(a => a.user_id) || []);
+        const busyMembers = new Set<string>();
+        
+        externalEventsData?.forEach(event => {
+          event.event_members?.forEach(member => {
+            busyMembers.add(member.user_id);
+          });
+        });
+
         const selectedMemberIds = new Set(eventMembers.map(em => em.band_member_id));
 
-        // Create a list of all members with their availability and selection status
+        // Crear lista de miembros con su disponibilidad y estado de selección
         const membersList = members.map(member => ({
           memberId: member.id,
           userId: member.user_id,
           selected: selectedMemberIds.has(member.id),
-          isAvailable: availableMembers.some(m => m.id === member.id) || selectedMemberIds.has(member.id)
+          isAvailable: selectedMemberIds.has(member.id) || (
+            member.user_id ? (
+              availableUserIds.has(member.user_id) && !busyMembers.has(member.user_id)
+            ) : true
+          )
         }));
 
         setSelectedMembers(membersList);
@@ -230,30 +266,30 @@ export default function EventModal({
         }));
 
       if (event) {
-        // Update event details (excluding date)
-        const eventUpdateResult = await safeSupabaseRequest(
-          () => supabase
-            .from('events')
-            .update({
-              name: name.trim(),
-              time,
-              notes: notes.trim() || null
-            })
-            .eq('id', event.id),
-          'Error updating event'
-        );
+        try {
+          // Actualizar detalles del evento
+          await safeSupabaseRequest(
+            () => supabase
+              .from('events')
+              .update({
+                name: name.trim(),
+                time,
+                notes: notes.trim() || null
+              })
+              .eq('id', event.id),
+            'Error al actualizar el evento'
+          );
 
-        if (eventUpdateResult !== null) {
-          // Delete existing members
+          // Eliminar miembros existentes
           await safeSupabaseRequest(
             () => supabase
               .from('event_members')
               .delete()
               .eq('event_id', event.id),
-            'Error updating event members'
+            'Error al actualizar los miembros del evento'
           );
 
-          // Add new members
+          // Agregar nuevos miembros
           await safeSupabaseRequest(
             () => supabase
               .from('event_members')
@@ -265,10 +301,15 @@ export default function EventModal({
                   created_by: user.id
                 }))
               ),
-            'Error adding event members'
+            'Error al agregar los miembros del evento'
           );
 
-          toast.success('Event updated successfully!');
+          toast.success('¡Evento actualizado correctamente!');
+          onEventSaved();
+          onClose();
+          resetForm();
+        } catch (error) {
+          console.error('Error al guardar el evento:', error);
         }
       } else {
         // Create new event

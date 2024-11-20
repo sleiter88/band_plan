@@ -103,16 +103,10 @@
   border-radius: 2px !important;
 }
 
-.day-content.has-event::before {
-  content: '' !important;
-  position: absolute !important;
-  top: 2px !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  width: 4px !important;
-  height: 4px !important;
-  background-color: rgb(239 68 68) !important;
-  border-radius: 50% !important;
+.day-content.has-event {
+  background-color: rgba(249, 115, 22, 0.1) !important;
+  border: 1px solid rgba(249, 115, 22, 0.3) !important;
+  border-radius: 4px !important;
 }
 
 .availability-dots {
@@ -227,4 +221,26 @@
 .tooltip-member.other {
   background-color: rgb(249 250 251) !important;
   color: rgb(107 114 128) !important;
+}
+
+/* Opción 1: Fondo sutil con borde */
+.day-content.has-event {
+  background-color: rgba(249, 115, 22, 0.1) !important; /* Naranja con opacidad */
+  border: 1px solid rgba(249, 115, 22, 0.3) !important;
+  border-radius: 4px !important;
+}
+
+/* Opción 2: Solo fondo con gradiente */
+.day-content.has-event {
+  background: linear-gradient(to bottom, 
+    rgba(249, 115, 22, 0.05) 0%,
+    rgba(249, 115, 22, 0.15) 100%) !important;
+  border-radius: 4px !important;
+}
+
+/* Opción 3: Fondo sutil con borde izquierdo */
+.day-content.has-event {
+  background-color: rgba(249, 115, 22, 0.05) !important;
+  border-left: 3px solid rgb(249, 115, 22) !important;
+  border-radius: 0 4px 4px 0 !important;
 }

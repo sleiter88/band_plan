@@ -126,28 +126,20 @@ useEffect(() => {
           id,
           date,
           name,
-          band_id,
-          event_members (
-            user_id
-          )
+          band_id
         `)
         .eq('band_id', bandId),
       'Error fetching band events'
     );
 
     if (eventsData) {
-      const formattedEvents: MemberEvent[] = [];
-      eventsData.forEach(event => {
-        event.event_members?.forEach(member => {
-          formattedEvents.push({
-            event_id: event.id,
-            date: event.date,
-            user_id: member.user_id,
-            name: event.name,
-            band_id: event.band_id
-          });
-        });
-      });
+      const formattedEvents: MemberEvent[] = eventsData.map(event => ({
+        event_id: event.id,
+        date: event.date,
+        user_id: '', // Este campo ya no es necesario para mostrar eventos
+        name: event.name,
+        band_id: event.band_id
+      }));
       setBandEvents(formattedEvents);
     }
   };
@@ -486,7 +478,7 @@ useEffect(() => {
                   )}
                   {hasEvent && (
                     <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full">
-                      {events.length > 1 ? `${events[0].name} y más` : events[0].name}
+                      {events.length > 1 ? `${events[0].name} y ${events.length - 1} más` : events[0].name}
                     </span>
                   )}
                 </div>
