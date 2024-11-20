@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { DayPicker } from 'react-day-picker';
 import { format, isSameDay } from 'date-fns';
 import { toast } from 'react-hot-toast';
-import { Calendar, Loader2, ChevronDown, Music } from 'lucide-react';
+import { Calendar, Loader2, ChevronDown, Music, Download } from 'lucide-react';
 import 'react-day-picker/dist/style.css';
 import { BandMember } from '../types';
 import { useParams } from 'react-router-dom';
@@ -556,6 +556,46 @@ useEffect(() => {
     );
   };
 
+  const downloadAvailabilityDates = () => {
+    let content = "FECHAS DISPONIBLES DE LA BANDA\n\n";
+    
+    // Filtrar fechas disponibles que no tienen eventos
+    const availableDatesWithoutEvents = bandAvailableDates.filter(date => {
+      const eventsOnDate = getEventsForDate(date);
+      return eventsOnDate.length === 0;
+    });
+
+    // Ordenar fechas cronológicamente
+    availableDatesWithoutEvents
+      .sort((a, b) => a.getTime() - b.getTime())
+      .forEach(date => {
+        content += `${format(date, 'dd/MM/yyyy')}\n`;
+        const membersForDay = getMembersForDay(date);
+        content += "Miembros disponibles:\n";
+        membersForDay.forEach(member => {
+          const instruments = member.instruments.map(i => i.name).join(", ");
+          content += `- ${member.name} (${member.role_in_band}) - ${instruments}\n`;
+        });
+        content += "\n";
+      });
+
+    // Agregar mensaje si no hay fechas disponibles
+    if (availableDatesWithoutEvents.length === 0) {
+      content += "No hay fechas disponibles sin eventos programados.\n";
+    }
+
+    // Crear y descargar el archivo
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `disponibilidad_banda_${format(new Date(), 'dd-MM-yyyy')}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-8">
@@ -629,6 +669,16 @@ useEffect(() => {
             <span className="text-sm text-gray-600">Event scheduled</span>
           </div>
         </div>
+      </div>
+
+      <div className="flex justify-between items-center">
+        <button
+          onClick={downloadAvailabilityDates}
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        >
+          <Download className="w-4 h-4 mr-2" />
+          Descargar Fechas Disponibles
+        </button>
       </div>
     </div>
   );
