@@ -9,6 +9,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import BandManagement from './pages/BandManagement';
 import ProtectedRoute from './components/ProtectedRoute';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 
 function App() {
   const { setUser, setSession } = useAuthStore();
@@ -49,6 +50,7 @@ function App() {
                 <BandManagement />
               </ProtectedRoute>
             } />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           </Routes>
         </main>
         <Toaster position="top-right" />
