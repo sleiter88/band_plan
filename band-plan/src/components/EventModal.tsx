@@ -10,6 +10,7 @@ import { es as esLocale } from 'date-fns/locale';
 import { useAuthStore } from '../store/authStore';
 import EventMemberSelector from './EventMemberSelector';
 import { safeSupabaseRequest } from '../lib/supabaseUtils';
+import { debounce } from 'lodash';
 
 interface EventModalProps {
   isOpen: boolean;
@@ -27,6 +28,12 @@ interface EventMember {
   userId: string | null;
   selected: boolean;
   isAvailable: boolean;
+}
+
+interface Location {
+  display_name: string;
+  lat: string;
+  lon: string;
 }
 
 export default function EventModal({
@@ -47,6 +54,10 @@ export default function EventModal({
   const [selectedMembers, setSelectedMembers] = useState<EventMember[]>([]);
   const [validationError, setValidationError] = useState(false);
   const { user } = useAuthStore();
+  const [location, setLocation] = useState('');
+  const [locationResults, setLocationResults] = useState<Location[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     if (event) {
@@ -233,6 +244,29 @@ export default function EventModal({
     ));
   };
 
+  const searchLocations = async (query: string) => {
+    if (!query.trim()) {
+      setLocationResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
+      );
+      const data = await response.json();
+      setLocationResults(data);
+    } catch (error) {
+      console.error('Error searching locations:', error);
+      toast.error('Error al buscar ubicaciones');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const debouncedSearch = debounce(searchLocations, 500);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -264,6 +298,20 @@ export default function EventModal({
           memberId: m.memberId,
           userId: m.userId
         }));
+
+      const eventData = {
+        band_id: bandId,
+        name: name.trim(),
+        date,
+        time,
+        notes: notes.trim() || null,
+        created_by: user.id,
+        location: selectedLocation ? {
+          name: selectedLocation.display_name,
+          latitude: selectedLocation.lat,
+          longitude: selectedLocation.lon
+        } : null,
+      };
 
       if (event) {
         try {
@@ -443,6 +491,49 @@ export default function EventModal({
               validationError={validationError}
             />
           )}
+
+          <div className="relative">
+            <Input
+              label="Ubicación"
+              value={location}
+              onChange={(e) => {
+                setLocation(e.target.value);
+                debouncedSearch(e.target.value);
+              }}
+              placeholder="Buscar ubicación..."
+            />
+            
+            {isSearching && (
+              <div className="absolute right-3 top-9">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+              </div>
+            )}
+            
+            {locationResults.length > 0 && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                {locationResults.map((result, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 focus:outline-none"
+                    onClick={() => {
+                      setSelectedLocation(result);
+                      setLocation(result.display_name);
+                      setLocationResults([]);
+                    }}
+                  >
+                    {result.display_name}
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            {selectedLocation && (
+              <div className="mt-2 p-2 bg-gray-50 rounded-md text-sm">
+                Ubicación seleccionada: {selectedLocation.display_name}
+              </div>
+            )}
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
