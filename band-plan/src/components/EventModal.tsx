@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Event, BandMember } from '../types';
 import Button from './Button';
 import Input from './Input';
-import { X } from 'lucide-react';
+import { X, MapPin, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { format, isSameDay } from 'date-fns';
 import { es as esLocale } from 'date-fns/locale';
@@ -36,6 +36,17 @@ interface Location {
   lon: string;
 }
 
+interface LocationData {
+  name: string;
+  coordinates: {
+    latitude: string;
+    longitude: string;
+  };
+}
+
+// Añadir esta variable fuera del componente
+let currentSearchController: AbortController | null = null;
+
 export default function EventModal({
   isOpen,
   onClose,
@@ -58,6 +69,7 @@ export default function EventModal({
   const [locationResults, setLocationResults] = useState<Location[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [events, setEvents] = useState<Event[]>([]);
 
   useEffect(() => {
     if (event) {
@@ -73,6 +85,21 @@ export default function EventModal({
       loadAvailableMembers(formattedDate);
     }
   }, [event, selectedDate]);
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      const { data } = await supabase
+        .from('events')
+        .select('*')
+        .eq('band_id', bandId);
+      
+      setEvents(data || []);
+    };
+
+    if (isOpen) {
+      fetchEvents();
+    }
+  }, [isOpen, bandId]);
 
   const loadEventMembers = async () => {
     if (!event) return;
@@ -250,54 +277,96 @@ export default function EventModal({
       return;
     }
 
+    if (currentSearchController) {
+      currentSearchController.abort();
+    }
+
+    currentSearchController = new AbortController();
+    
     setIsSearching(true);
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
+        `https://nominatim.openstreetmap.org/search?` + 
+        `format=json` +
+        `&q=${encodeURIComponent(query)}` +
+        `&countrycodes=es` + // Limitar a España
+        `&bounded=1` +
+        `&viewbox=-9.38,43.45,3.35,36.00` + // Bounding box de España
+        `&limit=5`,
+        { signal: currentSearchController.signal }
       );
       const data = await response.json();
-      setLocationResults(data);
+      
+      // Ordenar resultados priorizando lugares en España
+      const sortedData = data.sort((a: Location, b: Location) => {
+        // Priorizar resultados que contengan "Madrid" o "España"
+        const aIsLocal = (a.display_name.toLowerCase().includes('madrid') || 
+                         a.display_name.toLowerCase().includes('españa'));
+        const bIsLocal = (b.display_name.toLowerCase().includes('madrid') || 
+                         b.display_name.toLowerCase().includes('españa'));
+        
+        if (aIsLocal && !bIsLocal) return -1;
+        if (!aIsLocal && bIsLocal) return 1;
+        return 0;
+      });
+
+      setLocationResults(sortedData);
     } catch (error) {
-      console.error('Error searching locations:', error);
-      toast.error('Error al buscar ubicaciones');
+      if (error.name !== 'AbortError') {
+        console.error('Error searching locations:', error);
+        toast.error('Error al buscar ubicaciones');
+      }
     } finally {
       setIsSearching(false);
+      currentSearchController = null;
     }
   };
 
-  const debouncedSearch = debounce(searchLocations, 500);
+  // Limpiar el controlador cuando el componente se desmonte
+  useEffect(() => {
+    return () => {
+      if (currentSearchController) {
+        currentSearchController.abort();
+      }
+    };
+  }, []);
+
+  const debouncedSearch = React.useCallback(
+    debounce((query: string) => {
+      searchLocations(query);
+    }, 300), // Reducido a 300ms para una respuesta más rápida
+    []
+  );
+
+  const handleLocationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setLocation(value);
+    setLocationResults([]); // Limpiar resultados anteriores inmediatamente
+    
+    if (!value.trim()) {
+      setLocationResults([]);
+      return;
+    }
+    
+    debouncedSearch(value);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) {
-      toast.error('Please enter an event name');
+    
+    if (!name || !date) {
+      toast.error('Por favor completa los campos requeridos');
       return;
     }
 
-    if (!date) {
-      toast.error('Please select a date');
-      return;
-    }
-
-    const missingInstruments = validateMemberSelection();
-    if (missingInstruments.size > 0) {
-      toast.error(`Missing instruments: ${Array.from(missingInstruments).join(', ')}`);
-      return;
-    }
-
-    if (!user) {
-      toast.error('You must be logged in to create events');
-      return;
-    }
-
-    setLoading(true);
     try {
-      const selectedMemberData = selectedMembers
-        .filter(m => m.selected)
-        .map(m => ({
-          memberId: m.memberId,
-          userId: m.userId
-        }));
+      const locationData = selectedLocation ? {
+        name: selectedLocation.display_name,
+        coordinates: {
+          latitude: selectedLocation.lat,
+          longitude: selectedLocation.lon
+        }
+      } : null;
 
       const eventData = {
         band_id: bandId,
@@ -306,103 +375,38 @@ export default function EventModal({
         time,
         notes: notes.trim() || null,
         created_by: user.id,
-        location: selectedLocation ? {
-          name: selectedLocation.display_name,
-          latitude: selectedLocation.lat,
-          longitude: selectedLocation.lon
-        } : null,
+        location: locationData,
       };
 
+      let result;
+      
       if (event) {
-        try {
-          // Actualizar detalles del evento
-          await safeSupabaseRequest(
-            () => supabase
-              .from('events')
-              .update({
-                name: name.trim(),
-                time,
-                notes: notes.trim() || null
-              })
-              .eq('id', event.id),
-            'Error al actualizar el evento'
-          );
-
-          // Eliminar miembros existentes
-          await safeSupabaseRequest(
-            () => supabase
-              .from('event_members')
-              .delete()
-              .eq('event_id', event.id),
-            'Error al actualizar los miembros del evento'
-          );
-
-          // Agregar nuevos miembros
-          await safeSupabaseRequest(
-            () => supabase
-              .from('event_members')
-              .insert(
-                selectedMemberData.map(member => ({
-                  event_id: event.id,
-                  band_member_id: member.memberId,
-                  user_id: member.userId,
-                  created_by: user.id
-                }))
-              ),
-            'Error al agregar los miembros del evento'
-          );
-
-          toast.success('¡Evento actualizado correctamente!');
-          onEventSaved();
-          onClose();
-          resetForm();
-        } catch (error) {
-          console.error('Error al guardar el evento:', error);
-        }
+        // Actualizar evento existente
+        result = await supabase
+          .from('events')
+          .update(eventData)
+          .eq('id', event.id)
+          .select();
       } else {
-        // Create new event
-        const eventData = await safeSupabaseRequest(
-          () => supabase
-            .from('events')
-            .insert([{
-              band_id: bandId,
-              name: name.trim(),
-              date,
-              time,
-              notes: notes.trim() || null,
-              created_by: user.id
-            }])
-            .select()
-            .single(),
-          'Error creating event'
-        );
-
-        if (eventData) {
-          await safeSupabaseRequest(
-            () => supabase
-              .from('event_members')
-              .insert(
-                selectedMemberData.map(member => ({
-                  event_id: eventData.id,
-                  band_member_id: member.memberId,
-                  user_id: member.userId,
-                  created_by: user.id
-                }))
-              ),
-            'Error adding event members'
-          );
-
-          toast.success('Event created successfully!');
-        }
+        // Crear nuevo evento
+        result = await supabase
+          .from('events')
+          .insert([eventData])
+          .select();
       }
 
-      onEventSaved();
+      const { data, error } = result;
+
+      if (error) {
+        throw error;
+      }
+
       onClose();
-      resetForm();
+      toast.success(event ? 'Evento actualizado exitosamente' : 'Evento creado exitosamente');
+      if (onEventSaved) onEventSaved();
     } catch (error) {
       console.error('Error saving event:', error);
-    } finally {
-      setLoading(false);
+      toast.error(event ? 'Error al actualizar el evento' : 'Error al crear el evento');
     }
   };
 
@@ -412,6 +416,25 @@ export default function EventModal({
     setTime('');
     setNotes('');
     setSelectedMembers([]);
+  };
+
+  const sortAndFilterDates = (dates: Date[]) => {
+    // Convertir las fechas disponibles a strings para comparación más fácil
+    const availableDatesSet = new Set(availableDates.map(d => format(d, 'yyyy-MM-dd')));
+    
+    // Obtener las fechas que ya tienen eventos
+    const existingEventDates = new Set(
+      events.map(event => format(new Date(event.date), 'yyyy-MM-dd'))
+    );
+    
+    return dates
+      // Filtramos solo las fechas que están en availableDatesSet Y NO tienen eventos
+      .filter(date => {
+        const dateStr = format(date, 'yyyy-MM-dd');
+        return availableDatesSet.has(dateStr) && !existingEventDates.has(dateStr);
+      })
+      // Ordenamos las fechas de manera ascendente
+      .sort((a, b) => a.getTime() - b.getTime());
   };
 
   if (!isOpen) return null;
@@ -463,7 +486,7 @@ export default function EventModal({
                 className="w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 p-2"
               >
                 <option value="" disabled>Select a date</option>
-                {availableDates.map((availableDate, index) => {
+                {sortAndFilterDates(availableDates).map((availableDate, index) => {
                   const formattedDate = format(availableDate, 'yyyy-MM-dd');
                   return (
                     <option key={index} value={formattedDate}>
@@ -492,45 +515,94 @@ export default function EventModal({
             />
           )}
 
-          <div className="relative">
-            <Input
-              label="Ubicación"
-              value={location}
-              onChange={(e) => {
-                setLocation(e.target.value);
-                debouncedSearch(e.target.value);
-              }}
-              placeholder="Buscar ubicación..."
-            />
+          <div className="relative space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Ubicación
+            </label>
             
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <MapPin className="h-5 w-5 text-gray-400" />
+              </div>
+              
+              <Input
+                value={location}
+                onChange={handleLocationChange}
+                className="pl-10 pr-10"
+                placeholder="Buscar ubicación..."
+              />
+              
+              {location && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocation('');
+                    setSelectedLocation(null);
+                    setLocationResults([]);
+                  }}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                >
+                  <X className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                </button>
+              )}
+            </div>
+
             {isSearching && (
-              <div className="absolute right-3 top-9">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+              <div className="flex items-center justify-center p-4">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             )}
-            
+
             {locationResults.length > 0 && (
-              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
                 {locationResults.map((result, index) => (
                   <button
                     key={index}
                     type="button"
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100 focus:outline-none"
+                    className="w-full text-left px-4 py-3 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none transition-colors duration-150 flex items-start gap-3 border-b border-gray-100 last:border-0"
                     onClick={() => {
                       setSelectedLocation(result);
                       setLocation(result.display_name);
                       setLocationResults([]);
                     }}
                   >
-                    {result.display_name}
+                    <MapPin className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                    <div>
+                      <span className="block text-sm font-medium text-gray-900">
+                        {result.display_name.split(',')[0]}
+                      </span>
+                      <span className="block text-xs text-gray-500 mt-0.5">
+                        {result.display_name.split(',').slice(1).join(',').trim()}
+                      </span>
+                    </div>
                   </button>
                 ))}
               </div>
             )}
-            
+
             {selectedLocation && (
-              <div className="mt-2 p-2 bg-gray-50 rounded-md text-sm">
-                Ubicación seleccionada: {selectedLocation.display_name}
+              <div className="mt-3 p-4 bg-primary/5 rounded-lg border border-primary/10">
+                <div className="flex items-start gap-3">
+                  <MapPin className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <span className="block text-sm font-medium text-gray-900">
+                      Ubicación seleccionada
+                    </span>
+                    <span className="block text-sm text-gray-500 mt-1">
+                      {selectedLocation.display_name}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedLocation(null);
+                      setLocation('');
+                    }}
+                    className="flex-shrink-0 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
             )}
           </div>

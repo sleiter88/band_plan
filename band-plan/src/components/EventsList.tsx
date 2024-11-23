@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Event, BandMember } from '../types';
-import { Calendar, Clock, Trash2, Edit2, Users } from 'lucide-react';
+import { Calendar, Clock, Trash2, Edit2, Users, MapPin } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import Button from './Button';
@@ -177,6 +177,12 @@ export default function EventsList({
     );
   };
 
+  const truncateLocation = (location: string, maxLength: number = 15) => {
+    return location.length > maxLength 
+      ? `${location.slice(0, maxLength)}...` 
+      : location;
+  };
+
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-lg shadow-sm border border-gray-100">
@@ -236,6 +242,12 @@ export default function EventsList({
                                       <Users className="w-3 h-3 mr-1" />
                                       {event.members.length}
                                     </div>
+                                    {event.location && (
+                                      <div className="flex items-center">
+                                        <MapPin className="w-3 h-3 mr-1" />
+                                        {truncateLocation(event.location.name)}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               </div>
