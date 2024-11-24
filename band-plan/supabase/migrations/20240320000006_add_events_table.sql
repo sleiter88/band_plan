@@ -1,7 +1,13 @@
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view events for their groups" ON public.events;
+DROP POLICY IF EXISTS "Principal members and admins can manage events" ON public.events;
+DROP POLICY IF EXISTS "Principal members and admins can update events" ON public.events;
+DROP POLICY IF EXISTS "Principal members and admins can delete events" ON public.events;
+
 -- Create events table
 CREATE TABLE IF NOT EXISTS public.events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  band_id UUID NOT NULL REFERENCES public.bands(id),
+  group_id UUID NOT NULL REFERENCES public.groups(id),
   name VARCHAR NOT NULL,
   date DATE NOT NULL,
   time TIME NOT NULL,
@@ -21,13 +27,13 @@ CREATE TRIGGER set_updated_at
   EXECUTE FUNCTION public.set_updated_at();
 
 -- Policies
-CREATE POLICY "Users can view events for their bands"
+CREATE POLICY "Users can view events for their groups"
   ON public.events FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM public.band_members
-      WHERE band_members.band_id = events.band_id
-      AND band_members.user_id = auth.uid()
+      SELECT 1 FROM public.group_members
+      WHERE group_members.group_id = events.group_id
+      AND group_members.user_id = auth.uid()
     )
   );
 
@@ -38,15 +44,15 @@ CREATE POLICY "Principal members and admins can manage events"
       SELECT 1 FROM public.users u
       WHERE u.id = auth.uid()
       AND (
-        -- Admin can manage any band's events
+        -- Admin can manage any group's events
         u.role = 'admin'
         OR
-        -- Principal members can manage their band's events
+        -- Principal members can manage their group's events
         EXISTS (
-          SELECT 1 FROM public.band_members bm
-          WHERE bm.band_id = events.band_id
-          AND bm.user_id = auth.uid()
-          AND bm.role_in_band = 'principal'
+          SELECT 1 FROM public.group_members gm
+          WHERE gm.group_id = events.group_id
+          AND gm.user_id = auth.uid()
+          AND gm.role_in_group = 'principal'
         )
       )
     )
@@ -59,15 +65,15 @@ CREATE POLICY "Principal members and admins can update events"
       SELECT 1 FROM public.users u
       WHERE u.id = auth.uid()
       AND (
-        -- Admin can manage any band's events
+        -- Admin can manage any group's events
         u.role = 'admin'
         OR
-        -- Principal members can manage their band's events
+        -- Principal members can manage their group's events
         EXISTS (
-          SELECT 1 FROM public.band_members bm
-          WHERE bm.band_id = events.band_id
-          AND bm.user_id = auth.uid()
-          AND bm.role_in_band = 'principal'
+          SELECT 1 FROM public.group_members gm
+          WHERE gm.group_id = events.group_id
+          AND gm.user_id = auth.uid()
+          AND gm.role_in_group = 'principal'
         )
       )
     )
@@ -80,15 +86,15 @@ CREATE POLICY "Principal members and admins can delete events"
       SELECT 1 FROM public.users u
       WHERE u.id = auth.uid()
       AND (
-        -- Admin can manage any band's events
+        -- Admin can manage any group's events
         u.role = 'admin'
         OR
-        -- Principal members can manage their band's events
+        -- Principal members can manage their group's events
         EXISTS (
-          SELECT 1 FROM public.band_members bm
-          WHERE bm.band_id = events.band_id
-          AND bm.user_id = auth.uid()
-          AND bm.role_in_band = 'principal'
+          SELECT 1 FROM public.group_members gm
+          WHERE gm.group_id = events.group_id
+          AND gm.user_id = auth.uid()
+          AND gm.role_in_group = 'principal'
         )
       )
     )

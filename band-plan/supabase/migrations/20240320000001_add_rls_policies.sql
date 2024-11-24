@@ -1,14 +1,27 @@
--- Enable RLS on all tables
-ALTER TABLE public.bands ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.band_members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.instruments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.band_member_instruments ENABLE ROW LEVEL SECURITY;
+-- Drop existing policies
+DROP POLICY IF EXISTS "Enable read access for groups" ON public.groups;
+DROP POLICY IF EXISTS "Enable insert for admin users only on groups" ON public.groups;
 
--- Bands policies
-CREATE POLICY "Enable read access for all users" ON public.bands
+DROP POLICY IF EXISTS "Enable read access for group members" ON public.group_members;
+DROP POLICY IF EXISTS "Enable member management" ON public.group_members;
+
+DROP POLICY IF EXISTS "Enable read access for instruments" ON public.instruments;
+DROP POLICY IF EXISTS "Enable instrument management" ON public.instruments;
+
+DROP POLICY IF EXISTS "Enable read access for group member instruments" ON public.group_member_instruments;
+DROP POLICY IF EXISTS "Enable instrument assignment" ON public.group_member_instruments;
+
+-- Enable RLS on all tables
+ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.group_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.instruments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.group_member_instruments ENABLE ROW LEVEL SECURITY;
+
+-- Groups policies
+CREATE POLICY "Enable read access for groups" ON public.groups
   FOR SELECT USING (true);
 
-CREATE POLICY "Enable insert for admin users only" ON public.bands
+CREATE POLICY "Enable insert for admin users only on groups" ON public.groups
   FOR INSERT WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.users
@@ -17,11 +30,11 @@ CREATE POLICY "Enable insert for admin users only" ON public.bands
     )
   );
 
--- Band members policies
-CREATE POLICY "Enable read access for all users" ON public.band_members
+-- Group members policies
+CREATE POLICY "Enable read access for group members" ON public.group_members
   FOR SELECT USING (true);
 
-CREATE POLICY "Enable member management" ON public.band_members
+CREATE POLICY "Enable member management" ON public.group_members
   FOR INSERT WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.users u
@@ -32,18 +45,18 @@ CREATE POLICY "Enable member management" ON public.band_members
         OR
         -- Principal members can add new members
         EXISTS (
-          SELECT 1 FROM public.band_members bm
-          WHERE bm.band_id = band_members.band_id
-          AND bm.user_id = auth.uid()
-          AND bm.role_in_band = 'principal'
+          SELECT 1 FROM public.group_members gm
+          WHERE gm.group_id = group_members.group_id
+          AND gm.user_id = auth.uid()
+          AND gm.role_in_group = 'principal'
         )
         OR
         -- Users can add themselves if they're not already members
         (
-          band_members.user_id = auth.uid()
+          group_members.user_id = auth.uid()
           AND NOT EXISTS (
-            SELECT 1 FROM public.band_members existing
-            WHERE existing.band_id = band_members.band_id
+            SELECT 1 FROM public.group_members existing
+            WHERE existing.group_id = group_members.group_id
             AND existing.user_id = auth.uid()
           )
         )
@@ -52,7 +65,7 @@ CREATE POLICY "Enable member management" ON public.band_members
   );
 
 -- Instruments policies
-CREATE POLICY "Enable read access for all users" ON public.instruments
+CREATE POLICY "Enable read access for instruments" ON public.instruments
   FOR SELECT USING (true);
 
 CREATE POLICY "Enable instrument management" ON public.instruments
@@ -66,30 +79,30 @@ CREATE POLICY "Enable instrument management" ON public.instruments
         OR
         -- Principal members can add instruments
         EXISTS (
-          SELECT 1 FROM public.band_members bm
-          WHERE bm.user_id = auth.uid()
-          AND bm.role_in_band = 'principal'
+          SELECT 1 FROM public.group_members gm
+          WHERE gm.user_id = auth.uid()
+          AND gm.role_in_group = 'principal'
         )
         OR
-        -- First member of a band can add instruments
+        -- First member of a group can add instruments
         EXISTS (
-          SELECT 1 FROM public.band_members bm
-          WHERE bm.user_id = auth.uid()
+          SELECT 1 FROM public.group_members gm
+          WHERE gm.user_id = auth.uid()
           AND NOT EXISTS (
-            SELECT 1 FROM public.band_members prev
-            WHERE prev.band_id = bm.band_id
-            AND prev.created_at < bm.created_at
+            SELECT 1 FROM public.group_members prev
+            WHERE prev.group_id = gm.group_id
+            AND prev.created_at < gm.created_at
           )
         )
       )
     )
   );
 
--- Band member instruments policies
-CREATE POLICY "Enable read access for all users" ON public.band_member_instruments
+-- Group member instruments policies
+CREATE POLICY "Enable read access for group member instruments" ON public.group_member_instruments
   FOR SELECT USING (true);
 
-CREATE POLICY "Enable instrument assignment" ON public.band_member_instruments
+CREATE POLICY "Enable instrument assignment" ON public.group_member_instruments
   FOR INSERT WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.users u
@@ -100,17 +113,17 @@ CREATE POLICY "Enable instrument assignment" ON public.band_member_instruments
         OR
         -- Principal members can assign instruments
         EXISTS (
-          SELECT 1 FROM public.band_members bm
-          WHERE bm.user_id = auth.uid()
-          AND bm.role_in_band = 'principal'
+          SELECT 1 FROM public.group_members gm
+          WHERE gm.user_id = auth.uid()
+          AND gm.role_in_group = 'principal'
         )
         OR
         -- Users can assign instruments to themselves when joining
         EXISTS (
-          SELECT 1 FROM public.band_members bm
-          WHERE bm.id = band_member_instruments.band_member_id
-          AND bm.user_id = auth.uid()
-          AND bm.created_by = auth.uid()
+          SELECT 1 FROM public.group_members gm
+          WHERE gm.id = group_member_instruments.group_member_id
+          AND gm.user_id = auth.uid()
+          AND gm.created_by = auth.uid()
         )
       )
     )

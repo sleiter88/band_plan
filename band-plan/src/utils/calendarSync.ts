@@ -1,10 +1,10 @@
 import { supabase } from '../lib/supabase';
 
-export async function updateBandCalendar(bandId: string, memberId: string) {
+export async function updateGroupCalendar(groupId: string, memberId: string) {
   try {
     const { data: calendarData, error: calendarError } = await supabase
-      .rpc('get_band_calendar', {
-        p_band_id: bandId,
+      .rpc('get_group_calendar', {
+        p_group_id: groupId,
         p_member_id: memberId
       });
 
@@ -28,7 +28,7 @@ export async function updateBandCalendar(bandId: string, memberId: string) {
     const { error: uploadError } = await supabase
       .storage
       .from('calendars')
-      .upload(`${bandId}/${memberId}/${fileName}`, calendarFile, {
+      .upload(`${groupId}/${memberId}/${fileName}`, calendarFile, {
         cacheControl: '0',
         upsert: true,
         contentType: 'text/calendar;charset=utf-8'
@@ -39,12 +39,12 @@ export async function updateBandCalendar(bandId: string, memberId: string) {
     const { data: { publicUrl } } = supabase
       .storage
       .from('calendars')
-      .getPublicUrl(`${bandId}/${memberId}/${fileName}`);
+      .getPublicUrl(`${groupId}/${memberId}/${fileName}`);
 
     const urlWithCache = `${publicUrl}?v=${Date.now()}`;
 
     const { error: updateError } = await supabase
-      .from('band_members')
+      .from('group_members')
       .update({ 
         calendar_url: urlWithCache,
         calendar_updated_at: new Date().toISOString()

@@ -1,26 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Event, BandMember } from '../types';
+import { Event, GroupMember } from '../types';
 import { Calendar, Clock, Trash2, Edit2, Users, MapPin } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import Button from './Button';
 import EventModal from './EventModal';
 import { safeSupabaseRequest } from '../lib/supabaseUtils';
-import { updateBandCalendar } from '../utils/calendarSync';
+import { updateGroupCalendar } from '../utils/calendarSync';
 
 interface EventsListProps {
-  bandId: string;
+  groupId: string;
   canManageEvents: boolean;
   availableDates: Date[];
-  members: BandMember[];
+  members: GroupMember[];
 }
 
 interface EventMember {
-  band_member_id: string;
+  group_member_id: string;
   user_id: string | null;
   member_name: string;
-  role_in_band: string;
+  role_in_group: string;
 }
 
 interface EventWithMembers extends Event {
@@ -28,7 +28,7 @@ interface EventWithMembers extends Event {
 }
 
 export default function EventsList({
-  bandId,
+  groupId,
   canManageEvents,
   availableDates,
   members,
@@ -41,7 +41,7 @@ export default function EventsList({
 
   useEffect(() => {
     fetchEvents();
-  }, [bandId]);
+  }, [groupId]);
 
   const fetchEvents = async () => {
     try {
@@ -50,7 +50,7 @@ export default function EventsList({
           supabase
             .from('events')
             .select('*')
-            .eq('band_id', bandId)
+            .eq('group_id', groupId)
             .order('date')
             .order('time'),
         'Error loading events'
@@ -63,19 +63,19 @@ export default function EventsList({
               () =>
                 supabase
                   .from('event_members')
-                  .select('band_member_id, user_id')
+                  .select('group_member_id, user_id')
                   .eq('event_id', event.id),
               'Error loading event members'
             );
 
             const mappedMembers: EventMember[] =
               eventMembers?.map((em) => {
-                const member = members.find((m) => m.id === em.band_member_id);
+                const member = members.find((m) => m.id === em.group_member_id);
                 return {
-                  band_member_id: em.band_member_id,
+                  group_member_id: em.group_member_id,
                   user_id: em.user_id,
                   member_name: member?.name || 'Unknown Member',
-                  role_in_band: member?.role_in_band || 'principal',
+                  role_in_group: member?.role_in_group || 'principal',
                 };
               }) || [];
 
@@ -101,19 +101,17 @@ export default function EventsList({
     }
 
     try {
-      // Primero obtenemos los miembros del evento con su información de sincronización
       const { data: eventMembers, error: membersError } = await supabase
         .from('event_members')
         .select(`
-          band_member_id,
+          group_member_id,
           user_id,
-          band_members!inner(sync_calendar)
+          group_members!event_members_group_member_id_fkey(sync_calendar)
         `)
         .eq('event_id', eventId);
 
       if (membersError) throw membersError;
 
-      // Eliminamos el evento y sus relaciones
       const { error: deleteError } = await supabase
         .from('events')
         .delete()
@@ -121,25 +119,24 @@ export default function EventsList({
 
       if (deleteError) throw deleteError;
 
-      // Actualizamos los calendarios de los miembros que tienen sincronización activada
       if (eventMembers && eventMembers.length > 0) {
         console.log('Actualizando calendarios después de eliminar evento');
         await Promise.all(
           eventMembers
-            .filter(member => member.band_members.sync_calendar)
+            .filter(member => member.group_members.sync_calendar)
             .map(async (member) => {
               try {
-                await updateBandCalendar(bandId, member.band_member_id);
-                console.log('Calendario actualizado para miembro:', member.band_member_id);
+                await updateGroupCalendar(groupId, member.group_member_id);
+                console.log('Calendario actualizado para miembro:', member.group_member_id);
               } catch (error) {
-                console.error('Error actualizando calendario para miembro:', member.band_member_id, error);
+                console.error('Error actualizando calendario para miembro:', member.group_member_id, error);
               }
             })
         );
       }
 
       toast.success('Evento eliminado correctamente');
-      fetchEvents(); // Recargar la lista de eventos
+      fetchEvents();
     } catch (error) {
       console.error('Error deleting event:', error);
       toast.error('Error al eliminar el evento');
@@ -169,16 +166,15 @@ export default function EventsList({
   };
 
   const renderEventMembers = (event: EventWithMembers) => {
-    const principalMembers = event.members.filter(m => m.role_in_band === 'principal');
-    const substituteMembers = event.members.filter(m => m.role_in_band === 'sustituto');
+    const principalMembers = event.members.filter(m => m.role_in_group === 'principal');
+    const substituteMembers = event.members.filter(m => m.role_in_group === 'sustituto');
 
     return (
       <div className="mt-1.5 space-y-1">
-        {/* Miembros Principales */}
         <div className="flex flex-wrap gap-1">
           {principalMembers.map((member) => (
             <span
-              key={member.band_member_id}
+              key={member.group_member_id}
               className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700"
             >
               {member.member_name}
@@ -186,13 +182,12 @@ export default function EventsList({
           ))}
         </div>
 
-        {/* Sustitutos */}
         {substituteMembers.length > 0 && (
           <div className="flex flex-wrap gap-1">
             <span className="text-xs text-gray-500 mr-1">Sustitutos:</span>
             {substituteMembers.map((member) => (
               <span
-                key={member.band_member_id}
+                key={member.group_member_id}
                 className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-50 text-yellow-700"
               >
                 {member.member_name}
@@ -318,7 +313,7 @@ export default function EventsList({
       <EventModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        bandId={bandId}
+        groupId={groupId}
         onEventSaved={() => {
           fetchEvents();
           setIsAddModalOpen(false);
@@ -334,7 +329,7 @@ export default function EventsList({
             setIsEditModalOpen(false);
             setSelectedEvent(null);
           }}
-          bandId={bandId}
+          groupId={groupId}
           event={selectedEvent}
           onEventSaved={() => {
             fetchEvents();

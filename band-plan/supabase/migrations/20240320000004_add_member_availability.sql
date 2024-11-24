@@ -1,3 +1,8 @@
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view all availabilities" ON public.member_availability;
+DROP POLICY IF EXISTS "Users can manage their own availability" ON public.member_availability;
+DROP POLICY IF EXISTS "Users can delete their own availability" ON public.member_availability;
+
 -- Create member_availability table
 CREATE TABLE IF NOT EXISTS public.member_availability (
   id SERIAL PRIMARY KEY,

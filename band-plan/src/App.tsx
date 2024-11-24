@@ -7,7 +7,7 @@ import Navbar from './components/Navbar';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
-import BandManagement from './pages/BandManagement';
+import GroupManagement from './pages/GroupManagement';
 import ProtectedRoute from './components/ProtectedRoute';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 
@@ -45,9 +45,9 @@ function App() {
                 <Dashboard />
               </ProtectedRoute>
             } />
-            <Route path="/band/:id" element={
+            <Route path="/group/:id" element={
               <ProtectedRoute>
-                <BandManagement />
+                <GroupManagement />
               </ProtectedRoute>
             } />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />

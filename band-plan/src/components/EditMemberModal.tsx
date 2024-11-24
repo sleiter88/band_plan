@@ -4,13 +4,13 @@ import Button from './Button';
 import Input from './Input';
 import { X, Music } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { BandMember, Instrument } from '../types';
+import { GroupMember, Instrument } from '../types';
 import { useAuthStore } from '../store/authStore';
 
 interface EditMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
-  member: BandMember & { instruments: { id: string; name: string; }[] };
+  member: GroupMember & { instruments: { id: string; name: string; }[] };
   instruments: Instrument[];
   onMemberUpdated: () => void;
   userRole: 'admin' | 'user' | null;
@@ -25,7 +25,7 @@ export default function EditMemberModal({
   userRole
 }: EditMemberModalProps) {
   const [name, setName] = useState(member.name);
-  const [role, setRole] = useState(member.role_in_band);
+  const [role, setRole] = useState(member.role_in_group);
   const [selectedInstruments, setSelectedInstruments] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const { user } = useAuthStore();
@@ -33,7 +33,7 @@ export default function EditMemberModal({
   useEffect(() => {
     if (member) {
       setName(member.name);
-      setRole(member.role_in_band);
+      setRole(member.role_in_group);
       setSelectedInstruments(member.instruments.map(i => i.id));
     }
   }, [member]);
@@ -64,10 +64,10 @@ export default function EditMemberModal({
     try {
       // Update member details
       const { error: updateError } = await supabase
-        .from('band_members')
+        .from('group_members')
         .update({
           name: name.trim(),
-          role_in_band: role
+          role_in_group: role
         })
         .eq('id', member.id);
 
@@ -75,18 +75,18 @@ export default function EditMemberModal({
 
       // Remove all existing instrument associations
       const { error: deleteError } = await supabase
-        .from('band_member_instruments')
+        .from('group_member_instruments')
         .delete()
-        .eq('band_member_id', member.id);
+        .eq('group_member_id', member.id);
 
       if (deleteError) throw deleteError;
 
       // Add new instrument associations
       const { error: insertError } = await supabase
-        .from('band_member_instruments')
+        .from('group_member_instruments')
         .insert(
           selectedInstruments.map(instrumentId => ({
-            band_member_id: member.id,
+            group_member_id: member.id,
             instrument_id: instrumentId,
             created_by: user.id
           }))

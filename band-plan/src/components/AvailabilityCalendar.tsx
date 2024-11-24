@@ -7,7 +7,7 @@ import { format, isSameDay } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import { Calendar, Loader2, ChevronDown, Music, Download } from 'lucide-react';
 import 'react-day-picker/dist/style.css';
-import { BandMember } from '../types';
+import { GroupMember } from '../types';
 import { useParams } from 'react-router-dom';
 import { es } from 'date-fns/locale';
 
@@ -24,11 +24,11 @@ interface MemberEvent {
   date: string;
   user_id: string;
   name: string;
-  band_id: string;
+  group_id: string;
 }
 
 interface AvailabilityCalendarProps {
-  members: BandMember[];
+  members: GroupMember[];
   onAvailableDatesChange?: (dates: Date[]) => void;
 }
 
@@ -36,39 +36,39 @@ export default function AvailabilityCalendar({
   members,
   onAvailableDatesChange 
 }: AvailabilityCalendarProps) {
-  const { id: bandId } = useParams<{ id: string }>();
+  const { id: groupId } = useParams<{ id: string }>();
   const [availabilities, setAvailabilities] = useState<MemberAvailability[]>([]);
   const [selectedDay, setSelectedDay] = useState<Date | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [bandAvailableDates, setBandAvailableDates] = useState<Date[]>([]);
+  const [groupAvailableDates, setGroupAvailableDates] = useState<Date[]>([]);
   const [memberEvents, setMemberEvents] = useState<MemberEvent[]>([]);
-  const [bandEvents, setBandEvents] = useState<MemberEvent[]>([]);
+  const [groupEvents, setGroupEvents] = useState<MemberEvent[]>([]);
   const [memberExternalEvents, setMemberExternalEvents] = useState<{ user_id: string; date: string; }[]>([]);
-  const [bandNotAvailableDates, setBandNotAvailableDates] = useState<Date[]>([]);
+  const [groupNotAvailableDates, setGroupNotAvailableDates] = useState<Date[]>([]);
   const { user } = useAuthStore();
 
 useEffect(() => {
   if (user) {
     checkAdminStatus();
     fetchAllAvailabilities();
-    fetchBandEvents();
+    fetchGroupEvents();
     fetchMemberEvents(); // Agrega esta línea
     fetchMemberExternalEvents();
   }
-}, [user, bandId]);
+}, [user, groupId]);
 
   useEffect(() => {
-    calculateBandAvailability();
-  }, [availabilities, memberEvents, bandEvents, memberExternalEvents]);
+    calculateGroupAvailability();
+  }, [availabilities, memberEvents, groupEvents, memberExternalEvents]);
 
   useEffect(() => {
     if (onAvailableDatesChange) {
-      onAvailableDatesChange(bandAvailableDates);
+      onAvailableDatesChange(groupAvailableDates);
     }
-  }, [bandAvailableDates, onAvailableDatesChange]);
+  }, [groupAvailableDates, onAvailableDatesChange]);
 
   const checkAdminStatus = async () => {
     const userData = await safeSupabaseRequest(
@@ -93,7 +93,7 @@ useEffect(() => {
           id,
           date,
           name,
-          band_id,
+          group_id,
           event_members (
             user_id
           )
@@ -110,7 +110,7 @@ useEffect(() => {
             date: event.date,
             user_id: member.user_id,
             name: event.name,
-            band_id: event.band_id
+            group_id: event.group_id
           });
         });
       });
@@ -119,7 +119,7 @@ useEffect(() => {
   };
   
 
-  const fetchBandEvents = async () => {
+  const fetchGroupEvents = async () => {
     const eventsData = await safeSupabaseRequest(
       () => supabase
         .from('events')
@@ -127,10 +127,10 @@ useEffect(() => {
           id,
           date,
           name,
-          band_id
+          group_id
         `)
-        .eq('band_id', bandId),
-      'Error fetching band events'
+        .eq('group_id', groupId),
+      'Error fetching group events'
     );
 
     if (eventsData) {
@@ -139,9 +139,9 @@ useEffect(() => {
         date: event.date,
         user_id: '', // Este campo ya no es necesario para mostrar eventos
         name: event.name,
-        band_id: event.band_id
+        group_id: event.group_id
       }));
-      setBandEvents(formattedEvents);
+      setGroupEvents(formattedEvents);
     }
   };
 
@@ -151,12 +151,12 @@ useEffect(() => {
         .from('events')
         .select(`
           date,
-          band_id,
+          group_id,
           event_members (
             user_id
           )
         `)
-        .neq('band_id', bandId),
+        .neq('group_id', groupId),
       'Error fetching member external events'
     );
 
@@ -175,17 +175,17 @@ useEffect(() => {
   };
 
   const fetchAllAvailabilities = async () => {
-    if (!bandId) return;
+    if (!groupId) return;
     
     setLoading(true);
     try {
-      const bandMemberIds = members.filter(m => m.user_id).map(m => m.user_id);
+      const groupMemberIds = members.filter(m => m.user_id).map(m => m.user_id);
 
       const availabilityData = await safeSupabaseRequest(
         () => supabase
           .from('member_availability')
           .select('user_id, date')
-          .in('user_id', bandMemberIds)
+          .in('user_id', groupMemberIds)
           .order('date'),
         'Error fetching availabilities'
       );
@@ -217,7 +217,7 @@ useEffect(() => {
     }
   };
 
-  const isMemberAvailableOnDate = (member: BandMember, date: Date) => {
+  const isMemberAvailableOnDate = (member: GroupMember, date: Date) => {
     // Check if member has any events on this date
     const hasEventOnDate = memberEvents.some(event => 
       event.user_id === member.user_id && 
@@ -239,12 +239,12 @@ useEffect(() => {
   };
 
   const getEventsForDate = (date: Date) => {
-    return bandEvents.filter(event => 
+    return groupEvents.filter(event => 
       isSameDay(new Date(event.date), date)
     );
   };
 
-  const calculateBandAvailability = () => {
+  const calculateGroupAvailability = () => {
     // Obtenemos todas las fechas relevantes
     const allDatesSet = new Set<string>();
     
@@ -325,8 +325,8 @@ useEffect(() => {
       }
     });
 
-    setBandAvailableDates(availableDates);
-    setBandNotAvailableDates(notAvailableDates);
+    setGroupAvailableDates(availableDates);
+    setGroupNotAvailableDates(notAvailableDates);
   };
 
   const canManageOtherMembers = () => {
@@ -429,7 +429,7 @@ useEffect(() => {
         .find(a => a.userId === member.user_id)
         ?.dates.some(d => isSameDay(d, date)) ?? false;
 
-      const hasEvent = bandEvents.some(event => 
+      const hasEvent = groupEvents.some(event => 
         event.user_id === member.user_id && 
         isSameDay(new Date(event.date), date)
       );
@@ -446,15 +446,15 @@ useEffect(() => {
     const otherMembersCount = membersForDay.filter(
       m => m.user_id !== (selectedMemberId || user?.id)
     ).length;
-    const isBandAvailable = bandAvailableDates.some(d => isSameDay(d, date));
-    const isBandNotAvailable = bandNotAvailableDates.some(d => isSameDay(d, date));
+    const isGroupAvailable = groupAvailableDates.some(d => isSameDay(d, date));
+    const isGroupNotAvailable = groupNotAvailableDates.some(d => isSameDay(d, date));
     const events = getEventsForDate(date);
     const hasEvent = events.length > 0;
 
     return (
       <div
-        className={`day-content ${isBandAvailable ? 'band-available' : ''} ${
-          isBandNotAvailable ? 'band-not-available' : ''
+        className={`day-content ${isGroupAvailable ? 'group-available' : ''} ${
+          isGroupNotAvailable ? 'group-not-available' : ''
         } ${hasEvent ? 'has-event' : ''}`}
       >
         <span>{date.getDate()}</span>
@@ -472,9 +472,9 @@ useEffect(() => {
               <div className="text-sm font-medium text-gray-900 mb-2">
                 {format(date, 'MMMM d, yyyy')}
                 <div className="flex flex-wrap gap-1 mt-1">
-                  {isBandAvailable && (
+                  {isGroupAvailable && (
                     <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
-                      Banda Disponible
+                      Grupo disponible
                     </span>
                   )}
                   {hasEvent && (
@@ -559,7 +559,7 @@ useEffect(() => {
 
   const downloadAvailabilityDates = () => {
     // Filtrar fechas disponibles sin eventos
-    const availableDatesWithoutEvents = bandAvailableDates
+    const availableDatesWithoutEvents = groupAvailableDates
       .filter(date => getEventsForDate(date).length === 0)
       .sort((a, b) => a.getTime() - b.getTime());
 
@@ -588,7 +588,7 @@ useEffect(() => {
     }, {} as Record<string, { withPrincipals: Date[], withSubstitutes: Date[] }>);
 
     // Generar el contenido del archivo
-    let content = "FECHAS DISPONIBLES DE LA BANDA\n\n";
+    let content = "FECHAS DISPONIBLES DEL GRUPO\n\n";
 
     if (Object.keys(datesByMonth).length === 0) {
       content += "No hay fechas disponibles sin eventos programados.\n";
@@ -621,7 +621,7 @@ useEffect(() => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `disponibilidad_banda_${format(new Date(), 'dd-MM-yyyy')}.txt`;
+    link.download = `disponibilidad_grupo_${format(new Date(), 'dd-MM-yyyy')}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -694,7 +694,7 @@ useEffect(() => {
           </div>
           <div className="flex items-center space-x-3 p-2 rounded-lg bg-gray-50">
             <div className="w-4 h-4 rounded-full bg-green-500"></div>
-            <span className="text-sm text-gray-600">Band available</span>
+            <span className="text-sm text-gray-600">Grupo disponible</span>
           </div>
           <div className="flex items-center space-x-3 p-2 rounded-lg bg-gray-50">
             <div className="w-4 h-4 rounded-full bg-red-500"></div>
@@ -709,7 +709,7 @@ useEffect(() => {
           className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
           <Download className="w-4 h-4 mr-2" />
-          Descargar Fechas Disponibles
+          Descargar Fechas Disponibles del Grupo
         </button>
       </div>
     </div>

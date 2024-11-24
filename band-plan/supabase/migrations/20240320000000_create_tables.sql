@@ -1,5 +1,5 @@
 -- Create tables with proper columns and relationships
-CREATE TABLE IF NOT EXISTS public.bands (
+CREATE TABLE IF NOT EXISTS public.groups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   created_by UUID NOT NULL REFERENCES auth.users(id),
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS public.bands (
 
 CREATE TABLE IF NOT EXISTS public.band_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  band_id UUID NOT NULL REFERENCES public.bands(id),
+  group_id UUID NOT NULL REFERENCES public.groups(id),
   user_id UUID REFERENCES auth.users(id),
   name TEXT NOT NULL,
   role_in_band TEXT NOT NULL CHECK (role_in_band IN ('principal', 'sustituto')),
@@ -47,7 +47,7 @@ $$ LANGUAGE plpgsql;
 
 -- Create updated_at triggers for all tables
 CREATE TRIGGER set_updated_at
-  BEFORE UPDATE ON public.bands
+  BEFORE UPDATE ON public.groups
   FOR EACH ROW
   EXECUTE FUNCTION public.set_updated_at();
 

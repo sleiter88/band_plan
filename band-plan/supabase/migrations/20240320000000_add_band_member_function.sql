@@ -3,7 +3,7 @@ DROP FUNCTION IF EXISTS public.add_band_member_with_instruments;
 
 -- Function to add a band member with instruments
 CREATE OR REPLACE FUNCTION public.add_band_member_with_instruments(
-  p_band_id UUID,
+  p_group_id UUID,
   p_name TEXT,
   p_role TEXT,
   p_user_id UUID,
@@ -33,7 +33,7 @@ BEGIN
 
   -- Check if band exists
   SELECT EXISTS (
-    SELECT 1 FROM public.bands WHERE id = p_band_id
+    SELECT 1 FROM public.bands WHERE id = p_group_id
   ) INTO v_band_exists;
 
   IF NOT v_band_exists THEN
@@ -58,14 +58,14 @@ BEGIN
 
   -- Create band member
   INSERT INTO public.band_members (
-    band_id,
+    group_id,
     user_id,
     name,
     role_in_band,
     created_by
   )
   VALUES (
-    p_band_id,
+    p_group_id,
     p_user_id,
     p_name,
     p_role,

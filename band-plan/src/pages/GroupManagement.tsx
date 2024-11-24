@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Band, BandMember, Instrument } from '../types';
+import { Group, GroupMember, Instrument } from '../types';
 import Button from '../components/Button';
 import { Plus, Music, User, Edit2, Calendar, Loader2, Trash2 } from 'lucide-react';
 import AddMemberModal from '../components/AddMemberModal';
@@ -14,23 +14,23 @@ import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
 import { safeSupabaseRequest } from '../lib/supabaseUtils';
 import CalendarInstructionsModal from '../components/CalendarInstructionsModal';
 
-interface ExtendedBandMember extends BandMember {
+interface ExtendedGroupMember extends GroupMember {
   instruments: {
     name: string;
     id: string;
   }[];
 }
 
-export default function BandManagement() {
+export default function GroupManagement() {
   const { id } = useParams<{ id: string }>();
-  const [band, setBand] = useState<Band | null>(null);
-  const [members, setMembers] = useState<ExtendedBandMember[]>([]);
+  const [group, setGroup] = useState<Group | null>(null);
+  const [members, setMembers] = useState<ExtendedGroupMember[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [selectedMember, setSelectedMember] = useState<ExtendedBandMember | null>(null);
-  const [memberToDelete, setMemberToDelete] = useState<ExtendedBandMember | null>(null);
+  const [selectedMember, setSelectedMember] = useState<ExtendedGroupMember | null>(null);
+  const [memberToDelete, setMemberToDelete] = useState<ExtendedGroupMemberExtendedGroupMember | null>(null);
   const [loading, setLoading] = useState(true);
   const [canAddMembers, setCanAddMembers] = useState(false);
   const [userRole, setUserRole] = useState<'admin' | 'user' | null>(null);
@@ -43,7 +43,7 @@ export default function BandManagement() {
 
   useEffect(() => {
     if (id) {
-      fetchBandData();
+      fetchGroupData();
     }
   }, [id, user]);
 
@@ -73,9 +73,9 @@ export default function BandManagement() {
 
       const userMember = members.find(m => m.user_id === user.id);
       setIsUserMember(!!userMember);
-      setIsPrincipalMember(userMember?.role_in_band === 'principal' || false);
+      setIsPrincipalMember(userMember?.role_in_group === 'principal' || false);
       
-      if (userMember?.role_in_band === 'principal') {
+      if (userMember?.role_in_group === 'principal') {
         setCanAddMembers(true);
       }
     } catch (error) {
@@ -83,47 +83,47 @@ export default function BandManagement() {
     }
   };
 
-  const fetchBandData = async () => {
+  const fetchGroupData = async () => {
     try {
-      const bandData = await safeSupabaseRequest(
+      const groupData = await safeSupabaseRequest(
         () => supabase
-          .from('bands')
+          .from('groups')
           .select('*')
           .eq('id', id)
           .single(),
-        'Error loading band'
+        'Error loading group'
       );
 
-      if (bandData) {
-        setBand(bandData);
+      if (groupData) {
+        setGroup(groupData);
       }
 
       const membersData = await safeSupabaseRequest(
         () => supabase
-          .from('band_members')
+          .from('group_members')
           .select(`
             *,
-            band_member_instruments!left (
-              instrument:instruments!inner (
+            group_member_instruments!group_member_instruments_group_member_id_fkey (
+              instrument:instruments (
                 id,
                 name
               )
             )
           `)
-          .eq('band_id', id)
-          .order('role_in_band', { ascending: false })
+          .eq('group_id', id)
+          .order('role_in_group', { ascending: false })
           .order('name'),
         'Error loading members'
       );
 
       if (membersData) {
-        const transformedMembers: ExtendedBandMember[] = membersData.map(member => ({
+        const transformedMembers: ExtendedGroupMember[] = membersData.map(member => ({
           ...member,
-          instruments: (member.band_member_instruments || [])
-            .filter(bmi => bmi?.instrument)
-            .map(bmi => ({
-              id: bmi.instrument.id,
-              name: bmi.instrument.name
+          instruments: (member.group_member_instruments || [])
+            .filter(gmi => gmi?.instrument)
+            .map(gmi => ({
+              id: gmi.instrument.id,
+              name: gmi.instrument.name
             }))
         }));
 
@@ -142,7 +142,7 @@ export default function BandManagement() {
         setInstruments(instrumentsData);
       }
     } catch (error) {
-      console.error('Error fetching band data:', error);
+      console.error('Error fetching group data:', error);
     } finally {
       setLoading(false);
     }
@@ -153,28 +153,28 @@ export default function BandManagement() {
 
     try {
       await safeSupabaseRequest(
-        () => supabase.rpc('link_band_member', {
+        () => supabase.rpc('link_group_member', {
           p_member_id: memberId,
           p_user_id: user.id,
-          p_band_id: id
+          p_group_id: id
         }),
         'Error linking member'
       );
 
       toast.success("¡Te has vinculado correctamente!");
-      await fetchBandData();
+      await fetchGroupData();
       await checkPermissions();
     } catch (error) {
       console.error('Error linking member:', error);
     }
   };
 
-  const handleEditMember = (member: ExtendedBandMember) => {
+  const handleEditMember = (member: ExtendedGroupMember) => {
     setSelectedMember(member);
     setIsEditModalOpen(true);
   };
 
-  const handleDeleteMember = (member: ExtendedBandMember) => {
+  const handleDeleteMember = (member: ExtendedGroupMember) => {
     setMemberToDelete(member);
     setIsDeleteModalOpen(true);
   };
@@ -185,7 +185,7 @@ export default function BandManagement() {
     try {
       await safeSupabaseRequest(
         () => supabase
-          .from('band_members')
+          .from('group_members')
           .delete()
           .eq('id', memberToDelete.id),
         'Error deleting member'
@@ -194,17 +194,17 @@ export default function BandManagement() {
       toast.success('Miembro eliminado correctamente');
       setIsDeleteModalOpen(false);
       setMemberToDelete(null);
-      fetchBandData();
+      fetchGroupData();
     } catch (error) {
       console.error('Error deleting member:', error);
     }
   };
 
   // Group members by role
-  const principalMembers = members.filter(m => m.role_in_band === 'principal');
-  const substituteMembers = members.filter(m => m.role_in_band === 'sustituto');
+  const principalMembers = members.filter(m => m.role_in_group === 'principal');
+  const substituteMembers = members.filter(m => m.role_in_group === 'sustituto');
 
-  const renderMemberGroup = (groupMembers: ExtendedBandMember[], title: string) => (
+  const renderMemberGroup = (groupMembers: ExtendedGroupMember[], title: string) => (
     <div>
       <div className="bg-gray-50 px-3 py-2">
         <h3 className="text-sm font-medium text-gray-700">{title}</h3>
@@ -219,11 +219,11 @@ export default function BandManagement() {
                     {member.name}
                   </h3>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    member.role_in_band === 'principal'
+                    member.role_in_group === 'principal'
                       ? 'bg-indigo-100 text-indigo-700'
                       : 'bg-yellow-100 text-yellow-700'
                   }`}>
-                    {member.role_in_band === 'principal' ? 'Principal' : 'Sustituto'}
+                    {member.role_in_group === 'principal' ? 'Principal' : 'Sustituto'}
                   </span>
                   {!member.user_id && (
                     <span className="text-xs text-gray-500">(Sin vincular)</span>
@@ -252,13 +252,13 @@ export default function BandManagement() {
                           try {
                             await safeSupabaseRequest(
                               () => supabase
-                                .from('band_members')
+                                .from('group_members')
                                 .update({ sync_calendar: !member.sync_calendar })
                                 .eq('id', member.id),
                               'Error actualizando preferencias de calendario'
                             );
                             toast.success('Preferencias de calendario actualizadas');
-                            fetchBandData();
+                            fetchGroupData();
                           } catch (error) {
                             console.error('Error:', error);
                           }
@@ -323,8 +323,8 @@ export default function BandManagement() {
     try {
       // Primero generamos el calendario
       const { data: calendarData, error: calendarError } = await supabase
-        .rpc('get_band_calendar', {
-          p_band_id: band?.id,
+        .rpc('get_group_calendar', {
+          p_group_id: group?.id,
           p_member_id: memberId
         });
 
@@ -339,7 +339,7 @@ export default function BandManagement() {
       const { error: uploadError } = await supabase
         .storage
         .from('calendars')
-        .upload(`${band?.id}/${memberId}/calendar.ics`, calendarFile, {
+        .upload(`${group?.id}/${memberId}/calendar.ics`, calendarFile, {
           cacheControl: '0',
           upsert: true
         });
@@ -353,7 +353,7 @@ export default function BandManagement() {
       const { data: { publicUrl } } = await supabase
         .storage
         .from('calendars')
-        .getPublicUrl(`${band?.id}/${memberId}/calendar.ics`);
+        .getPublicUrl(`${group?.id}/${memberId}/calendar.ics`);
 
       if (publicUrl) {
         setCalendarUrl(publicUrl);
@@ -379,11 +379,11 @@ export default function BandManagement() {
     );
   }
 
-  if (!band) {
+  if (!group) {
     return (
       <div className="text-center py-8">
-        <h2 className="text-xl font-semibold text-gray-900">Banda no encontrada</h2>
-        <p className="text-gray-500 mt-2">La banda que buscas no existe o no tienes acceso a ella.</p>
+        <h2 className="text-xl font-semibold text-gray-900">Grupo no encontrado</h2>
+        <p className="text-gray-500 mt-2">El grupo que buscas no existe o no tienes acceso a él.</p>
       </div>
     );
   }
@@ -392,7 +392,7 @@ export default function BandManagement() {
     <div className="max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{band.name}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{group.name}</h1>
           <p className="text-gray-500 mt-1">Gestiona miembros y disponibilidad</p>
         </div>
         {(canAddMembers || isPrincipalMember) && (!isUserMember || userRole === 'admin' || isPrincipalMember) && (
@@ -401,7 +401,7 @@ export default function BandManagement() {
             className="flex items-center space-x-2"
           >
             <Plus className="w-5 h-5" />
-            <span>{userRole === 'admin' || isPrincipalMember ? 'Añadir Miembro' : 'Unirse a la Banda'}</span>
+            <span>{userRole === 'admin' || isPrincipalMember ? 'Añadir Miembro' : 'Unirse al Grupo'}</span>
           </Button>
         )}
       </div>
@@ -410,13 +410,13 @@ export default function BandManagement() {
         {/* Members List */}
         <div className="bg-white rounded-lg shadow-md">
           <div className="p-4 border-b">
-            <h2 className="text-lg font-semibold">Miembros de la Banda</h2>
+            <h2 className="text-lg font-semibold">Miembros del Grupo</h2>
           </div>
           {members.length === 0 ? (
             <div className="text-center py-8">
               <User className="w-12 h-12 mx-auto mb-4 text-gray-400" />
               <p className="text-gray-500">
-                No hay miembros aún. {canAddMembers ? '¡Haz clic en "Unirse a la Banda" para ser el primer miembro!' : 'Espera a que alguien se una a la banda.'}
+                No hay miembros aún. {canAddMembers ? '¡Haz clic en "Unirse al Grupo" para ser el primer miembro!' : 'Espera a que alguien se una al grupo.'}
               </p>
             </div>
           ) : (
@@ -442,10 +442,10 @@ export default function BandManagement() {
       </div>
 
       {/* Events List */}
-      {band && (
+      {group && (
         <div className="mt-6 bg-white rounded-lg shadow-md">
           <EventsList
-            bandId={band.id}
+            groupId={group.id}
             canManageEvents={userRole === 'admin' || isPrincipalMember}
             availableDates={availableDates}
             members={members}
@@ -454,14 +454,14 @@ export default function BandManagement() {
       )}
 
       {/* Modals */}
-      {band && (canAddMembers || isPrincipalMember) && (!isUserMember || userRole === 'admin' || isPrincipalMember) && (
+      {group && (canAddMembers || isPrincipalMember) && (!isUserMember || userRole === 'admin' || isPrincipalMember) && (
         <AddMemberModal
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
-          bandId={band.id}
+          groupId={group.id}
           instruments={instruments}
-          onMemberAdded={fetchBandData}
-          isEmptyBand={members.length === 0}
+          onMemberAdded={fetchGroupData}
+          isEmptyGroup={members.length === 0}
           userRole={userRole}
         />
       )}
@@ -475,7 +475,7 @@ export default function BandManagement() {
           }}
           member={selectedMember}
           instruments={instruments}
-          onMemberUpdated={fetchBandData}
+          onMemberUpdated={fetchGroupData}
           userRole={userRole}
         />
       )}

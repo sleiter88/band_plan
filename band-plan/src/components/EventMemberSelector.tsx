@@ -1,10 +1,10 @@
 import React from 'react';
 import { Music, AlertCircle } from 'lucide-react';
-import { BandMember } from '../types';
-import { updateBandCalendar } from '../utils/calendarSync';
+import { GroupMember } from '../types';
+import { updateGroupCalendar } from '../utils/calendarSync';
 
 interface EventMemberSelectorProps {
-  members: BandMember[];
+  members: GroupMember[];
   selectedMembers: {
     memberId: string;
     userId: string | null;
@@ -13,7 +13,7 @@ interface EventMemberSelectorProps {
   }[];
   onMemberSelectionChange: (memberId: string, selected: boolean) => void;
   validationError: boolean;
-  bandId: string;
+  groupId: string;
 }
 
 export default function EventMemberSelector({
@@ -21,25 +21,25 @@ export default function EventMemberSelector({
   selectedMembers,
   onMemberSelectionChange,
   validationError,
-  bandId
+  groupId
 }: EventMemberSelectorProps) {
   // Group members by role
     const principalMembers = selectedMembers.filter(m => {
     const member = members.find(bm => bm.id === m.memberId);
-    return member?.role_in_band === 'principal';
+    return member?.role_in_group === 'principal';
   });
 
   const substituteMembers = selectedMembers.filter(m => {
     const member = members.find(bm => bm.id === m.memberId);
-    return member?.role_in_band === 'sustituto';
+    return member?.role_in_group === 'sustituto';
   });
 
   const renderMemberGroup = (groupMembers: typeof selectedMembers, title: string) => (
     <div className="space-y-2">
       <h4 className="text-sm font-medium text-gray-700">{title}</h4>
       {groupMembers.map((member) => {
-        const bandMember = members.find(m => m.id === member.memberId);
-        if (!bandMember) return null;
+        const groupMember = members.find(m => m.id === member.memberId);
+        if (!groupMember) return null;
 
         return (
           <div
@@ -62,7 +62,7 @@ export default function EventMemberSelector({
               />
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-900">{bandMember.name}</span>
+                  <span className="font-medium text-gray-900">{groupMember.name}</span>
                   {!member.isAvailable && (
                     <span className="inline-flex items-center text-xs text-red-700 bg-red-100 px-2 py-0.5 rounded-full">
                       <AlertCircle className="w-3 h-3 mr-1" />
@@ -72,7 +72,7 @@ export default function EventMemberSelector({
                 </div>
                 <div className="flex items-center text-sm text-gray-500">
                   <Music className="w-3 h-3 mr-1" />
-                  {bandMember.instruments.map(i => i.name).join(', ')}
+                  {groupMember.instruments.map(i => i.name).join(', ')}
                 </div>
               </div>
             </div>
@@ -89,7 +89,7 @@ export default function EventMemberSelector({
       // Si el miembro tiene sync_calendar activado, actualizar su calendario
       const member = members.find(m => m.id === memberId);
       if (member?.sync_calendar) {
-        await updateBandCalendar(bandId, memberId);
+        await updateGroupCalendar(groupId, memberId);
       }
     } catch (error) {
       console.error('Error updating member calendar:', error);

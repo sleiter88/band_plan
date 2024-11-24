@@ -5,18 +5,18 @@ export interface User {
   role: 'admin' | 'user';
 }
 
-export interface Band {
+export interface Group {
   id: string;
   name: string;
   created_by: string;
 }
 
-export interface BandMember {
+export interface GroupMember {
   id: string;
-  band_id: string;
+  group_id: string;
   user_id: string | null;
   name: string;
-  role_in_band: 'principal' | 'sustituto';
+  role_in_group: 'principal' | 'sustituto';
   created_by: string;
 }
 
@@ -26,16 +26,16 @@ export interface Instrument {
   created_by: string;
 }
 
-export interface BandMemberInstrument {
+export interface GroupMemberInstrument {
   id: number;
-  band_member_id: string;
+  group_member_id: string;
   instrument_id: string;
   created_by: string;
 }
 
 export interface Event {
   id: number;
-  band_id: string;
+  group_id: string;
   name: string;
   date: string;
   time: string;

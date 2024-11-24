@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Event, BandMember } from '../types';
+import { Event, GroupMember } from '../types';
 import Button from './Button';
 import Input from './Input';
 import { X, MapPin, Loader2 } from 'lucide-react';
@@ -11,17 +11,17 @@ import { useAuthStore } from '../store/authStore';
 import EventMemberSelector from './EventMemberSelector';
 import { safeSupabaseRequest } from '../lib/supabaseUtils';
 import { debounce } from 'lodash';
-import { updateBandCalendar } from '../utils/calendarSync';
+import { updateGroupCalendar } from '../utils/calendarSync';
 
 interface EventModalProps {
   isOpen: boolean;
   onClose: () => void;
-  bandId: string;
+  groupId: string;
   selectedDate?: Date;
   event?: Event;
   onEventSaved: () => void;
   availableDates: Date[];
-  members: BandMember[];
+  members: GroupMember[];
 }
 
 interface EventMember {
@@ -52,7 +52,7 @@ let currentSearchController: AbortController | null = null;
 export default function EventModal({
   isOpen,
   onClose,
-  bandId,
+  groupId,
   selectedDate,
   event,
   onEventSaved,
@@ -93,7 +93,7 @@ export default function EventModal({
       const { data } = await supabase
         .from('events')
         .select('*')
-        .eq('band_id', bandId);
+        .eq('group_id', groupId);
       
       setEvents(data || []);
     };
@@ -101,7 +101,7 @@ export default function EventModal({
     if (isOpen) {
       fetchEvents();
     }
-  }, [isOpen, bandId]);
+  }, [isOpen, groupId]);
 
   const loadEventMembers = async () => {
     if (!event) return;
@@ -111,7 +111,7 @@ export default function EventModal({
       const eventMembers = await safeSupabaseRequest(
         () => supabase
           .from('event_members')
-          .select('band_member_id, user_id')
+          .select('group_member_id, user_id')
           .eq('event_id', event.id),
         'Error loading event members'
       );
@@ -135,7 +135,7 @@ export default function EventModal({
               user_id
             )
           `)
-          .neq('band_id', bandId)
+          .neq('group_id', groupId)
           .eq('date', event.date),
         'Error loading external events'
       );
@@ -150,7 +150,7 @@ export default function EventModal({
           });
         });
 
-        const selectedMemberIds = new Set(eventMembers.map(em => em.band_member_id));
+        const selectedMemberIds = new Set(eventMembers.map(em => em.group_member_id));
 
         // Crear lista de miembros con su disponibilidad y estado de selección
         const membersList = members.map(member => ({
@@ -184,7 +184,7 @@ export default function EventModal({
               user_id
             )
           `)
-          .neq('band_id', bandId)
+          .neq('group_id', groupId)
           .eq('date', selectedDate),
         'Error loading external events'
       );
@@ -219,7 +219,7 @@ export default function EventModal({
           // Only select if it's a preselected member OR (it's a principal member AND is available)
           selected: preSelectedMemberIds ? 
             preSelectedMemberIds.includes(member.id) : 
-            (member.role_in_band === 'principal' && isAvailable),
+            (member.role_in_group === 'principal' && isAvailable),
           isAvailable,
           sync_calendar: member.sync_calendar
         };
@@ -243,7 +243,7 @@ export default function EventModal({
   }, [selectedMembers]);
 
   const validateMemberSelection = () => {
-    const principalMembers = members.filter(m => m.role_in_band === 'principal');
+    const principalMembers = members.filter(m => m.role_in_group === 'principal');
     const selectedMemberIds = selectedMembers.filter(m => m.selected).map(m => m.memberId);
     
     const missingInstruments = new Set<string>();
@@ -365,7 +365,7 @@ export default function EventModal({
       setLoading(true);
 
       const eventData = {
-        band_id: bandId,
+        group_id: groupId,
         name: name.trim(),
         date,
         time,
@@ -420,7 +420,7 @@ export default function EventModal({
           .filter(member => member.selected)
           .map(member => ({
             event_id: eventId,
-            band_member_id: member.memberId,
+            group_member_id: member.memberId,
             user_id: member.userId,
             created_by: user.id
           }));
@@ -440,7 +440,7 @@ export default function EventModal({
             .filter(member => member.selected && member.sync_calendar)
             .map(member => {
               console.log('Actualizando calendario para miembro:', member);
-              return updateBandCalendar(bandId, member.memberId);
+              return updateGroupCalendar(groupId, member.memberId);
             })
         );
       }

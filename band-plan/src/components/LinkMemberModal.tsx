@@ -1,12 +1,12 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import Button from './Button';
-import { BandMember } from '../types';
+import { GroupMember } from '../types';
 
 interface LinkMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
-  members: BandMember[];
+  members: GroupMember[];
   onLink: (memberId: string) => void;
 }
 
@@ -46,7 +46,7 @@ export default function LinkMemberModal({
                   <div>
                     <h3 className="font-medium">{member.name}</h3>
                     <p className="text-sm text-gray-500 capitalize">
-                      {member.role_in_band}
+                      {member.role_in_group}
                     </p>
                   </div>
                   <Button

@@ -1,22 +1,22 @@
 -- Asegurarnos de que las eliminaciones en cascada están configuradas correctamente
 ALTER TABLE public.event_members
-DROP CONSTRAINT IF EXISTS event_members_band_member_id_fkey,
-ADD CONSTRAINT event_members_band_member_id_fkey 
-FOREIGN KEY (band_member_id) 
-REFERENCES public.band_members(id) 
+DROP CONSTRAINT IF EXISTS event_members_group_member_id_fkey,
+ADD CONSTRAINT event_members_group_member_id_fkey 
+FOREIGN KEY (group_member_id) 
+REFERENCES public.group_members(id) 
 ON DELETE CASCADE;
 
-ALTER TABLE public.band_member_instruments
-DROP CONSTRAINT IF EXISTS band_member_instruments_band_member_id_fkey,
-ADD CONSTRAINT band_member_instruments_band_member_id_fkey 
-FOREIGN KEY (band_member_id) 
-REFERENCES public.band_members(id) 
+ALTER TABLE public.group_member_instruments
+DROP CONSTRAINT IF EXISTS group_member_instruments_group_member_id_fkey,
+ADD CONSTRAINT group_member_instruments_group_member_id_fkey 
+FOREIGN KEY (group_member_id) 
+REFERENCES public.group_members(id) 
 ON DELETE CASCADE;
 
 -- Asegurarnos de que la política de eliminación está correctamente configurada
-DROP POLICY IF EXISTS "Enable member removal for admins and principals" ON public.band_members;
+DROP POLICY IF EXISTS "Enable member removal for admins and principals" ON public.group_members;
 
-CREATE POLICY "Enable member removal for admins and principals" ON public.band_members
+CREATE POLICY "Enable member removal for admins and principals" ON public.group_members
 FOR DELETE USING (
   EXISTS (
     SELECT 1 FROM public.users u
@@ -24,10 +24,10 @@ FOR DELETE USING (
     AND (
       u.role = 'admin'
       OR EXISTS (
-        SELECT 1 FROM public.band_members bm
-        WHERE bm.band_id = band_members.band_id
-        AND bm.user_id = auth.uid()
-        AND bm.role_in_band = 'principal'
+        SELECT 1 FROM public.group_members gm
+        WHERE gm.group_id = group_members.group_id
+        AND gm.user_id = auth.uid()
+        AND gm.role_in_group = 'principal'
       )
     )
   )

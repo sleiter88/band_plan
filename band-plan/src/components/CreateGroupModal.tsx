@@ -6,14 +6,14 @@ import Input from './Input';
 import { X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-interface CreateBandModalProps {
+interface CreateGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onBandCreated: () => void;
+  onGroupCreated: () => void;
   isAdmin: boolean;
 }
 
-export default function CreateBandModal({ isOpen, onClose, onBandCreated, isAdmin }: CreateBandModalProps) {
+export default function CreateGroupModal({ isOpen, onClose, onGroupCreated, isAdmin }: CreateGroupModalProps) {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const { user } = useAuthStore();
@@ -23,14 +23,14 @@ export default function CreateBandModal({ isOpen, onClose, onBandCreated, isAdmi
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !isAdmin) {
-      toast.error('Only administrators can create bands');
+      toast.error('Only administrators can create groups');
       return;
     }
 
     setLoading(true);
     try {
       const { error } = await supabase
-        .from('bands')
+        .from('groups')
         .insert([
           {
             name,
@@ -40,12 +40,12 @@ export default function CreateBandModal({ isOpen, onClose, onBandCreated, isAdmi
 
       if (error) throw error;
 
-      toast.success('Band created successfully!');
-      onBandCreated();
+      toast.success('Group created successfully!');
+      onGroupCreated();
       onClose();
       setName('');
     } catch (error: any) {
-      toast.error(error.message || 'Failed to create band');
+      toast.error(error.message || 'Failed to create group');
     } finally {
       setLoading(false);
     }
@@ -55,7 +55,7 @@ export default function CreateBandModal({ isOpen, onClose, onBandCreated, isAdmi
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg w-full max-w-md">
         <div className="flex justify-between items-center p-6 border-b">
-          <h2 className="text-xl font-semibold">Create New Band</h2>
+          <h2 className="text-xl font-semibold">Create New Group</h2>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700"
@@ -66,11 +66,11 @@ export default function CreateBandModal({ isOpen, onClose, onBandCreated, isAdmi
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <Input
-            label="Band Name"
+            label="Group Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            placeholder="Enter band name"
+            placeholder="Enter group name"
           />
 
           <div className="flex justify-end space-x-3">
@@ -85,7 +85,7 @@ export default function CreateBandModal({ isOpen, onClose, onBandCreated, isAdmi
               type="submit"
               loading={loading}
             >
-              Create Band
+              Create Group
             </Button>
           </div>
         </form>

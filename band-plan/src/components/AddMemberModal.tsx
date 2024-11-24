@@ -10,10 +10,10 @@ import { useAuthStore } from '../store/authStore';
 interface AddMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
-  bandId: string;
+  groupId: string;
   instruments: Instrument[];
   onMemberAdded: () => void;
-  isEmptyBand: boolean;
+  isEmptyGroup: boolean;
   userRole: 'admin' | 'user' | null;
 }
 
@@ -28,10 +28,10 @@ type LocalInstrument = Instrument | NewInstrument;
 export default function AddMemberModal({
   isOpen,
   onClose,
-  bandId,
+  groupId,
   instruments: initialInstruments,
   onMemberAdded,
-  isEmptyBand,
+  isEmptyGroup,
   userRole
 }: AddMemberModalProps) {
   const [name, setName] = useState('');
@@ -64,14 +64,14 @@ export default function AddMemberModal({
 
     try {
       const { data, error } = await supabase
-        .from('band_members')
-        .select('role_in_band')
-        .eq('band_id', bandId)
+        .from('group_members')
+        .select('role_in_group')
+        .eq('group_id', groupId)
         .eq('user_id', user.id);
 
       if (error) throw error;
       
-      setIsPrincipalMember(data?.[0]?.role_in_band === 'principal');
+      setIsPrincipalMember(data?.[0]?.role_in_group === 'principal');
     } catch (error) {
       console.error('Error checking principal status:', error);
       setIsPrincipalMember(false);
@@ -153,11 +153,11 @@ export default function AddMemberModal({
         .map(inst => inst.name);
 
       const { data: memberData, error: memberError } = await supabase.rpc(
-        'add_band_member_with_instruments',
+        'add_group_member_with_instruments',
         {
-          p_band_id: bandId,
+          p_group_id: groupId,
           p_name: name,
-          p_role: isEmptyBand ? 'principal' : role,
+          p_role: isEmptyGroup ? 'principal' : role,
           p_user_id: userRole === 'user' && !isPrincipalMember ? user.id : null,
           p_instruments: existingInstruments,
           p_new_instruments: newInstruments
@@ -167,10 +167,10 @@ export default function AddMemberModal({
       if (memberError) throw memberError;
 
       if (!memberData) {
-        throw new Error('Failed to add band member');
+        throw new Error('Failed to add group member');
       }
 
-      toast.success(userRole === 'user' && !isPrincipalMember ? 'Successfully joined the band!' : 'Member added successfully!');
+      toast.success(userRole === 'user' && !isPrincipalMember ? 'Successfully joined the group!' : 'Member added successfully!');
       onMemberAdded();
       onClose();
       resetForm();
@@ -202,7 +202,7 @@ export default function AddMemberModal({
       <div className="bg-white rounded-lg w-full max-w-md">
         <div className="flex justify-between items-center p-6 border-b">
           <h2 className="text-xl font-semibold">
-            {isJoining ? 'Join Band' : 'Add New Member'}
+            {isJoining ? 'Join Group' : 'Add New Member'}
           </h2>
           <button
             onClick={onClose}
@@ -222,7 +222,7 @@ export default function AddMemberModal({
             disabled={isJoining}
           />
 
-          {!isEmptyBand && userRole === 'admin' && (
+          {!isEmptyGroup && userRole === 'admin' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Role
@@ -243,7 +243,7 @@ export default function AddMemberModal({
               <label className="block text-sm font-medium text-gray-700">
                 Instruments
               </label>
-              {!showNewInstrumentInput && (userRole === 'admin' || isEmptyBand || isPrincipalMember) && (
+              {!showNewInstrumentInput && (userRole === 'admin' || isEmptyGroup || isPrincipalMember) && (
                 <Button
                   type="button"
                   variant="secondary"
@@ -331,7 +331,7 @@ export default function AddMemberModal({
               type="submit"
               loading={loading}
             >
-              {isJoining ? 'Join Band' : 'Add Member'}
+              {isJoining ? 'Join Group' : 'Add Member'}
             </Button>
           </div>
         </form>
