@@ -1,6 +1,7 @@
 import React from 'react';
 import { Music, AlertCircle } from 'lucide-react';
 import { BandMember } from '../types';
+import { updateBandCalendar } from '../utils/calendarSync';
 
 interface EventMemberSelectorProps {
   members: BandMember[];
@@ -12,13 +13,15 @@ interface EventMemberSelectorProps {
   }[];
   onMemberSelectionChange: (memberId: string, selected: boolean) => void;
   validationError: boolean;
+  bandId: string;
 }
 
 export default function EventMemberSelector({
   members,
   selectedMembers,
   onMemberSelectionChange,
-  validationError
+  validationError,
+  bandId
 }: EventMemberSelectorProps) {
   // Group members by role
     const principalMembers = selectedMembers.filter(m => {
@@ -78,6 +81,20 @@ export default function EventMemberSelector({
       })}
     </div>
   );
+
+  const handleMemberSelectionChange = async (memberId: string, selected: boolean) => {
+    try {
+      onMemberSelectionChange(memberId, selected);
+      
+      // Si el miembro tiene sync_calendar activado, actualizar su calendario
+      const member = members.find(m => m.id === memberId);
+      if (member?.sync_calendar) {
+        await updateBandCalendar(bandId, memberId);
+      }
+    } catch (error) {
+      console.error('Error updating member calendar:', error);
+    }
+  };
 
   return (
     <div className="space-y-4">

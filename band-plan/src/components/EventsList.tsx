@@ -7,6 +7,7 @@ import { toast } from 'react-hot-toast';
 import Button from './Button';
 import EventModal from './EventModal';
 import { safeSupabaseRequest } from '../lib/supabaseUtils';
+import { updateBandCalendar } from '../utils/calendarSync';
 
 interface EventsListProps {
   bandId: string;
@@ -95,27 +96,47 @@ export default function EventsList({
   };
 
   const handleDelete = async (eventId: number) => {
-    if (
-      !window.confirm('¿Estás seguro de que quieres eliminar este evento?')
-    ) {
+    if (!window.confirm('¿Estás seguro de que quieres eliminar este evento?')) {
       return;
     }
 
     try {
-      await safeSupabaseRequest(
-        () => supabase.from('event_members').delete().eq('event_id', eventId),
-        'Error deleting event members'
-      );
+      // Primero obtenemos los miembros del evento antes de eliminarlo
+      const { data: eventMembers, error: membersError } = await supabase
+        .from('event_members')
+        .select('band_member_id, user_id')
+        .eq('event_id', eventId);
 
-      await safeSupabaseRequest(
-        () => supabase.from('events').delete().eq('id', eventId),
-        'Error deleting event'
-      );
+      if (membersError) throw membersError;
+
+      // Eliminamos el evento y sus relaciones
+      const { error: deleteError } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', eventId);
+
+      if (deleteError) throw deleteError;
+
+      // Actualizamos los calendarios de todos los miembros afectados
+      if (eventMembers && eventMembers.length > 0) {
+        console.log('Actualizando calendarios después de eliminar evento');
+        await Promise.all(
+          eventMembers.map(async (member) => {
+            try {
+              await updateBandCalendar(bandId, member.band_member_id);
+              console.log('Calendario actualizado para miembro:', member.band_member_id);
+            } catch (error) {
+              console.error('Error actualizando calendario para miembro:', member.band_member_id, error);
+            }
+          })
+        );
+      }
 
       toast.success('Evento eliminado correctamente');
-      fetchEvents();
+      fetchEvents(); // Recargar la lista de eventos
     } catch (error) {
       console.error('Error deleting event:', error);
+      toast.error('Error al eliminar el evento');
     }
   };
 

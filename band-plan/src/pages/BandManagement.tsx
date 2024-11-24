@@ -12,6 +12,7 @@ import AvailabilityCalendar from '../components/AvailabilityCalendar';
 import EventsList from '../components/EventsList';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
 import { safeSupabaseRequest } from '../lib/supabaseUtils';
+import CalendarInstructionsModal from '../components/CalendarInstructionsModal';
 
 interface ExtendedBandMember extends BandMember {
   instruments: {
@@ -37,6 +38,8 @@ export default function BandManagement() {
   const [availableDates, setAvailableDates] = useState<Date[]>([]);
   const { user } = useAuthStore();
   const [isUserMember, setIsUserMember] = useState(false);
+  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
+  const [calendarUrl, setCalendarUrl] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -239,6 +242,45 @@ export default function BandManagement() {
                     ))}
                   </div>
                 )}
+                {member.user_id === user?.id && (
+                  <div className="mt-2 flex items-center">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={member.sync_calendar}
+                        onChange={async () => {
+                          try {
+                            await safeSupabaseRequest(
+                              () => supabase
+                                .from('band_members')
+                                .update({ sync_calendar: !member.sync_calendar })
+                                .eq('id', member.id),
+                              'Error actualizando preferencias de calendario'
+                            );
+                            toast.success('Preferencias de calendario actualizadas');
+                            fetchBandData();
+                          } catch (error) {
+                            console.error('Error:', error);
+                          }
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                      <span className="ml-3 text-sm font-medium text-gray-700">
+                        Sincronizar eventos al calendario
+                      </span>
+                    </label>
+                  </div>
+                )}
+                {member.user_id === user?.id && member.sync_calendar && (
+                  <button
+                    onClick={() => getCalendarSubscriptionUrl(member.id)}
+                    className="mt-2 text-sm text-indigo-600 hover:text-indigo-700 flex items-center"
+                  >
+                    <Calendar className="w-4 h-4 mr-1" />
+                    Obtener enlace de suscripción al calendario
+                  </button>
+                )}
               </div>
               <div className="flex items-center gap-2 ml-4">
                 {(userRole === 'admin' || member.user_id === user?.id) && (
@@ -276,6 +318,58 @@ export default function BandManagement() {
       </div>
     </div>
   );
+
+  const getCalendarSubscriptionUrl = async (memberId: string) => {
+    try {
+      // Primero generamos el calendario
+      const { data: calendarData, error: calendarError } = await supabase
+        .rpc('get_band_calendar', {
+          p_band_id: band?.id,
+          p_member_id: memberId
+        });
+
+      if (calendarError) throw calendarError;
+      if (!calendarData) throw new Error('No se pudo generar el calendario');
+
+      // Convertimos el texto del calendario a un archivo Blob
+      const calendarBlob = new Blob([calendarData], { type: 'text/calendar' });
+      const calendarFile = new File([calendarBlob], 'calendar.ics', { type: 'text/calendar' });
+
+      // Subimos el archivo a Supabase Storage
+      const { error: uploadError } = await supabase
+        .storage
+        .from('calendars')
+        .upload(`${band?.id}/${memberId}/calendar.ics`, calendarFile, {
+          cacheControl: '0',
+          upsert: true
+        });
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
+
+      // Obtenemos la URL pública
+      const { data: { publicUrl } } = await supabase
+        .storage
+        .from('calendars')
+        .getPublicUrl(`${band?.id}/${memberId}/calendar.ics`);
+
+      if (publicUrl) {
+        setCalendarUrl(publicUrl);
+        setIsCalendarModalOpen(true);
+      } else {
+        throw new Error('No se pudo generar el enlace público');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      if (error.message === 'new row violates row-level security policy') {
+        toast.error('Error de permisos al generar el calendario. Por favor, contacta con el administrador.');
+      } else {
+        toast.error('Error al generar el enlace del calendario');
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -395,6 +489,12 @@ export default function BandManagement() {
         onConfirm={confirmDeleteMember}
         title="Eliminar Miembro"
         message={`¿Estás seguro de que quieres eliminar a ${memberToDelete?.name}? Esta acción no se puede deshacer.`}
+      />
+
+      <CalendarInstructionsModal
+        isOpen={isCalendarModalOpen}
+        onClose={() => setIsCalendarModalOpen(false)}
+        calendarUrl={calendarUrl}
       />
     </div>
   );

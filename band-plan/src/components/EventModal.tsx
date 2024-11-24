@@ -11,6 +11,7 @@ import { useAuthStore } from '../store/authStore';
 import EventMemberSelector from './EventMemberSelector';
 import { safeSupabaseRequest } from '../lib/supabaseUtils';
 import { debounce } from 'lodash';
+import { updateBandCalendar } from '../utils/calendarSync';
 
 interface EventModalProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ interface EventMember {
   userId: string | null;
   selected: boolean;
   isAvailable: boolean;
+  sync_calendar: boolean;
 }
 
 interface Location {
@@ -159,7 +161,8 @@ export default function EventModal({
             member.user_id ? (
               availableUserIds.has(member.user_id) && !busyMembers.has(member.user_id)
             ) : true
-          )
+          ),
+          sync_calendar: member.sync_calendar
         }));
 
         setSelectedMembers(membersList);
@@ -217,7 +220,8 @@ export default function EventModal({
           selected: preSelectedMemberIds ? 
             preSelectedMemberIds.includes(member.id) : 
             (member.role_in_band === 'principal' && isAvailable),
-          isAvailable
+          isAvailable,
+          sync_calendar: member.sync_calendar
         };
       });
 
@@ -351,22 +355,14 @@ export default function EventModal({
     debouncedSearch(value);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!name || !date) {
-      toast.error('Por favor completa los campos requeridos');
-      return;
-    }
-
+  const handleSave = async () => {
     try {
-      const locationData = selectedLocation ? {
-        name: selectedLocation.display_name,
-        coordinates: {
-          latitude: selectedLocation.lat,
-          longitude: selectedLocation.lon
-        }
-      } : null;
+      if (!name || !date) {
+        toast.error('Por favor completa los campos requeridos');
+        return;
+      }
+
+      setLoading(true);
 
       const eventData = {
         band_id: bandId,
@@ -375,38 +371,90 @@ export default function EventModal({
         time,
         notes: notes.trim() || null,
         created_by: user.id,
-        location: locationData,
+        location: selectedLocation ? {
+          name: selectedLocation.display_name,
+          coordinates: {
+            latitude: selectedLocation.lat,
+            longitude: selectedLocation.lon
+          }
+        } : null,
       };
 
-      let result;
+      let eventId;
       
       if (event) {
         // Actualizar evento existente
-        result = await supabase
+        const { data, error } = await supabase
           .from('events')
           .update(eventData)
           .eq('id', event.id)
-          .select();
+          .select()
+          .single();
+
+        if (error) throw error;
+        eventId = event.id;
       } else {
         // Crear nuevo evento
-        result = await supabase
+        const { data, error } = await supabase
           .from('events')
           .insert([eventData])
-          .select();
+          .select()
+          .single();
+
+        if (error) throw error;
+        eventId = data.id;
       }
 
-      const { data, error } = result;
+      // Guardar los miembros seleccionados
+      if (eventId) {
+        // Primero eliminar miembros existentes si es una actualización
+        if (event) {
+          await supabase
+            .from('event_members')
+            .delete()
+            .eq('event_id', eventId);
+        }
 
-      if (error) {
-        throw error;
+        // Insertar los miembros seleccionados
+        const eventMembers = selectedMembers
+          .filter(member => member.selected)
+          .map(member => ({
+            event_id: eventId,
+            band_member_id: member.memberId,
+            user_id: member.userId,
+            created_by: user.id
+          }));
+
+        if (eventMembers.length > 0) {
+          const { error: memberError } = await supabase
+            .from('event_members')
+            .insert(eventMembers);
+
+          if (memberError) throw memberError;
+        }
+
+        // Actualizar calendarios
+        console.log('Actualizando calendarios para miembros:', selectedMembers);
+        await Promise.all(
+          selectedMembers
+            .filter(member => member.selected && member.sync_calendar)
+            .map(member => {
+              console.log('Actualizando calendario para miembro:', member);
+              return updateBandCalendar(bandId, member.memberId);
+            })
+        );
       }
 
+      setLoading(false);
+      if (onEventSaved) {
+        onEventSaved();
+      }
       onClose();
-      toast.success(event ? 'Evento actualizado exitosamente' : 'Evento creado exitosamente');
-      if (onEventSaved) onEventSaved();
+      toast.success(event ? 'Evento actualizado' : 'Evento creado');
     } catch (error) {
+      setLoading(false);
       console.error('Error saving event:', error);
-      toast.error(event ? 'Error al actualizar el evento' : 'Error al crear el evento');
+      toast.error('Error al guardar el evento');
     }
   };
 
@@ -454,7 +502,7 @@ export default function EventModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSave} className="p-4 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Event Name"
@@ -629,11 +677,18 @@ export default function EventModal({
               Cancel
             </Button>
             <Button
-              type="submit"
-              loading={loading}
-              disabled={!date || validationError}
+              onClick={handleSave}
+              disabled={loading}
+              className="w-full"
             >
-              {event ? 'Save Changes' : 'Create Event'}
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                'Guardar'
+              )}
             </Button>
           </div>
         </form>
