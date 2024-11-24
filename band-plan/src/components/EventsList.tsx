@@ -101,10 +101,14 @@ export default function EventsList({
     }
 
     try {
-      // Primero obtenemos los miembros del evento antes de eliminarlo
+      // Primero obtenemos los miembros del evento con su información de sincronización
       const { data: eventMembers, error: membersError } = await supabase
         .from('event_members')
-        .select('band_member_id, user_id')
+        .select(`
+          band_member_id,
+          user_id,
+          band_members!inner(sync_calendar)
+        `)
         .eq('event_id', eventId);
 
       if (membersError) throw membersError;
@@ -117,18 +121,20 @@ export default function EventsList({
 
       if (deleteError) throw deleteError;
 
-      // Actualizamos los calendarios de todos los miembros afectados
+      // Actualizamos los calendarios de los miembros que tienen sincronización activada
       if (eventMembers && eventMembers.length > 0) {
         console.log('Actualizando calendarios después de eliminar evento');
         await Promise.all(
-          eventMembers.map(async (member) => {
-            try {
-              await updateBandCalendar(bandId, member.band_member_id);
-              console.log('Calendario actualizado para miembro:', member.band_member_id);
-            } catch (error) {
-              console.error('Error actualizando calendario para miembro:', member.band_member_id, error);
-            }
-          })
+          eventMembers
+            .filter(member => member.band_members.sync_calendar)
+            .map(async (member) => {
+              try {
+                await updateBandCalendar(bandId, member.band_member_id);
+                console.log('Calendario actualizado para miembro:', member.band_member_id);
+              } catch (error) {
+                console.error('Error actualizando calendario para miembro:', member.band_member_id, error);
+              }
+            })
         );
       }
 
