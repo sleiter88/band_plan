@@ -28,7 +28,7 @@ BEGIN
     WHERE id = p_member_id 
     AND group_id = p_group_id
   ) THEN
-    RAISE EXCEPTION 'Member does not belong to this group';
+    RAISE EXCEPTION 'El miembro no pertenece a este grupo';
   END IF;
 
   -- Iniciar el calendario con los headers necesarios y el nombre del grupo
@@ -38,35 +38,39 @@ BEGIN
                   'X-WR-CALNAME:' || group_name || chr(13) || chr(10) ||
                   'NAME:' || group_name || chr(13) || chr(10);
 
-  -- El resto de la función permanece igual...
+  -- Obtener eventos
   FOR event_record IN 
     SELECT 
+      e.id,
       e.name as event_name,
-      e.date as event_date,
-      e.time as event_time,
-      COALESCE(e.notes, '') as event_notes,
-      COALESCE(e.location->>'name', '') as location_name
+      e.date,
+      e.time,
+      COALESCE(e.notes, '') as notes,
+      COALESCE(split_part(e.location->>'name', ',', 1), '') as venue_name,
+      g.name as band_name
     FROM events e
     JOIN event_members em ON em.event_id = e.id
+    JOIN groups g ON g.id = e.group_id
     WHERE em.group_member_id = p_member_id
     AND e.group_id = p_group_id
     ORDER BY e.date, e.time
   LOOP
     calendar_text := calendar_text ||
       'BEGIN:VEVENT' || chr(13) || chr(10) ||
-      'UID:' || event_record.event_date || '-' || p_member_id || '@bandmanager.app' || chr(13) || chr(10) ||
+      'UID:' || event_record.id || '@bandmanager.app' || chr(13) || chr(10) ||
       'DTSTAMP:' || to_char(NOW() AT TIME ZONE 'UTC', 'YYYYMMDD"T"HH24MISS"Z"') || chr(13) || chr(10) ||
-      'DTSTART:' || to_char(event_record.event_date + event_record.event_time, 'YYYYMMDD"T"HH24MISS') || chr(13) || chr(10) ||
-      'SUMMARY:' || event_record.event_name || chr(13) || chr(10);
+      'DTSTART:' || to_char((event_record.date + event_record.time)::timestamp, 'YYYYMMDD"T"HH24MISS') || chr(13) || chr(10) ||
+      'DTEND:' || to_char((event_record.date + event_record.time + interval '30 minutes')::timestamp, 'YYYYMMDD"T"HH24MISS') || chr(13) || chr(10) ||
+      'SUMMARY:' || event_record.band_name || ' - ' || event_record.event_name || chr(13) || chr(10);
 
-    IF event_record.location_name != '' THEN
+    IF event_record.venue_name != '' THEN
       calendar_text := calendar_text ||
-        'LOCATION:' || event_record.location_name || chr(13) || chr(10);
+        'LOCATION:' || event_record.venue_name || chr(13) || chr(10);
     END IF;
 
-    IF event_record.event_notes != '' THEN
+    IF event_record.notes != '' THEN
       calendar_text := calendar_text ||
-        'DESCRIPTION:' || event_record.event_notes || chr(13) || chr(10);
+        'DESCRIPTION:' || event_record.notes || chr(13) || chr(10);
     END IF;
 
     calendar_text := calendar_text ||
@@ -78,3 +82,6 @@ BEGIN
   RETURN calendar_text;
 END;
 $$; 
+
+-- Dar permisos de ejecución
+GRANT EXECUTE ON FUNCTION public.get_group_calendar(UUID, UUID) TO authenticated; 
