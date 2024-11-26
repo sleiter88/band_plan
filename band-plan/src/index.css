@@ -91,7 +91,7 @@
   padding-bottom: 12px !important;
 }
 
-.day-content.band-available::after {
+.day-content.group-available::after {
   content: '' !important;
   position: absolute !important;
   bottom: 2px !important;
