@@ -1,8 +1,9 @@
 -- Drop existing function if it exists
 DROP FUNCTION IF EXISTS public.add_band_member_with_instruments;
+DROP FUNCTION IF EXISTS public.add_group_member_with_instruments;
 
--- Function to add a band member with instruments
-CREATE OR REPLACE FUNCTION public.add_band_member_with_instruments(
+-- Function to add a group member with instruments
+CREATE OR REPLACE FUNCTION public.add_group_member_with_instruments(
   p_group_id UUID,
   p_name TEXT,
   p_role TEXT,
@@ -20,7 +21,7 @@ DECLARE
   v_instrument_id UUID;
   v_new_instrument_ids UUID[] := '{}';
   v_user_role TEXT;
-  v_band_exists BOOLEAN;
+  v_group_exists BOOLEAN;
   v_is_admin BOOLEAN;
 BEGIN
   -- Check if user exists and get their role
@@ -31,13 +32,13 @@ BEGIN
   -- Set admin flag
   v_is_admin := v_user_role = 'admin';
 
-  -- Check if band exists
+  -- Check if group exists
   SELECT EXISTS (
-    SELECT 1 FROM public.bands WHERE id = p_group_id
-  ) INTO v_band_exists;
+    SELECT 1 FROM public.groups WHERE id = p_group_id
+  ) INTO v_group_exists;
 
-  IF NOT v_band_exists THEN
-    RAISE EXCEPTION 'Band does not exist';
+  IF NOT v_group_exists THEN
+    RAISE EXCEPTION 'Group does not exist';
   END IF;
 
   -- Verify permissions
@@ -56,12 +57,12 @@ BEGIN
     END LOOP;
   END IF;
 
-  -- Create band member
-  INSERT INTO public.band_members (
+  -- Create group member
+  INSERT INTO public.group_members (
     group_id,
     user_id,
     name,
-    role_in_band,
+    role_in_group,
     created_by
   )
   VALUES (
@@ -75,8 +76,8 @@ BEGIN
 
   -- Add existing instruments
   IF array_length(p_instruments, 1) > 0 THEN
-    INSERT INTO public.band_member_instruments (
-      band_member_id,
+    INSERT INTO public.group_member_instruments (
+      group_member_id,
       instrument_id,
       created_by
     )
@@ -89,8 +90,8 @@ BEGIN
 
   -- Add new instruments
   IF array_length(v_new_instrument_ids, 1) > 0 THEN
-    INSERT INTO public.band_member_instruments (
-      band_member_id,
+    INSERT INTO public.group_member_instruments (
+      group_member_id,
       instrument_id,
       created_by
     )
