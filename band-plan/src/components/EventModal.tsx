@@ -369,6 +369,19 @@ export default function EventModal({
         name: name.trim(),
         date,
         time,
+        datetime: (() => {
+          const localDate = new Date(`${date}T${time}`);
+          const offset = -localDate.getTimezoneOffset();
+          const localISOString = new Date(localDate.getTime() - (offset * 60 * 1000))
+            .toISOString()
+            .replace('Z', formatTimezoneOffset(offset));
+          
+          console.log('Zona horaria local:', Intl.DateTimeFormat().resolvedOptions().timeZone);
+          console.log('Fecha local:', localDate.toString());
+          console.log('Fecha con offset local:', localISOString);
+          
+          return localISOString;
+        })(),
         notes: notes.trim() || null,
         created_by: user.id,
         location: selectedLocation ? {
@@ -695,4 +708,11 @@ export default function EventModal({
       </div>
     </div>
   );
+}
+
+// Función auxiliar para formatear el offset de zona horaria
+function formatTimezoneOffset(offset: number): string {
+  const sign = offset > 0 ? '+' : '-';
+  const hours = Math.floor(Math.abs(offset) / 60);
+  return `${sign}${hours.toString().padStart(2, '0')}`;
 }

@@ -39,6 +39,7 @@ export interface Event {
   name: string;
   date: string;
   time: string;
+  datetime: string;
   notes?: string;
   created_by: string;
   created_at: string;
