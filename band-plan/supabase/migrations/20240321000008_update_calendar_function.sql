@@ -36,7 +36,11 @@ BEGIN
                   'VERSION:2.0' || chr(13) || chr(10) ||
                   'PRODID:-//Band Manager//ES' || chr(13) || chr(10) ||
                   'X-WR-CALNAME:' || group_name || chr(13) || chr(10) ||
-                  'NAME:' || group_name || chr(13) || chr(10);
+                  'NAME:' || group_name || chr(13) || chr(10) ||
+                  'BEGIN:VTIMEZONE' || chr(13) || chr(10) ||
+                  'TZID:Europe/Madrid' || chr(13) || chr(10) ||
+                  'X-LIC-LOCATION:Europe/Madrid' || chr(13) || chr(10) ||
+                  'END:VTIMEZONE' || chr(13) || chr(10);
 
   -- Obtener eventos
   FOR event_record IN 
@@ -59,8 +63,8 @@ BEGIN
       'BEGIN:VEVENT' || chr(13) || chr(10) ||
       'UID:' || event_record.id || '@bandmanager.app' || chr(13) || chr(10) ||
       'DTSTAMP:' || to_char(NOW() AT TIME ZONE 'UTC', 'YYYYMMDD"T"HH24MISS"Z"') || chr(13) || chr(10) ||
-      'DTSTART:' || to_char((event_record.date + event_record.time)::timestamp, 'YYYYMMDD"T"HH24MISS') || chr(13) || chr(10) ||
-      'DTEND:' || to_char((event_record.date + event_record.time + interval '30 minutes')::timestamp, 'YYYYMMDD"T"HH24MISS') || chr(13) || chr(10) ||
+      'DTSTART;TZID=Europe/Madrid:' || to_char((event_record.date + event_record.time)::timestamp, 'YYYYMMDD"T"HH24MISS') || chr(13) || chr(10) ||
+      'DTEND;TZID=Europe/Madrid:' || to_char((event_record.date + event_record.time + interval '2 hours')::timestamp, 'YYYYMMDD"T"HH24MISS') || chr(13) || chr(10) ||
       'SUMMARY:' || event_record.band_name || ' - ' || event_record.event_name || chr(13) || chr(10);
 
     IF event_record.venue_name != '' THEN
@@ -81,7 +85,7 @@ BEGIN
 
   RETURN calendar_text;
 END;
-$$; 
+$$;
 
 -- Dar permisos de ejecución
-GRANT EXECUTE ON FUNCTION public.get_group_calendar(UUID, UUID) TO authenticated; 
+GRANT EXECUTE ON FUNCTION public.get_group_calendar(UUID, UUID) TO authenticated;

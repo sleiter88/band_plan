@@ -55,7 +55,7 @@ useEffect(() => {
     checkAdminStatus();
     fetchAllAvailabilities();
     fetchGroupEvents();
-    fetchMemberEvents(); // Agrega esta línea
+    fetchMemberEvents();
     fetchMemberExternalEvents();
   }
 }, [user, groupId]);
@@ -146,33 +146,50 @@ useEffect(() => {
   };
 
   const fetchMemberExternalEvents = async () => {
-    const eventsData = await safeSupabaseRequest(
-      () => supabase
-        .from('events')
-        .select(`
-          date,
-          group_id,
-          event_members (
-            user_id
-          )
-        `)
-        .neq('group_id', groupId),
-      'Error fetching member external events'
-    );
-
-    if (eventsData) {
-      const externalEvents: { user_id: string; date: string; }[] = [];
-      eventsData.forEach(event => {
-        event.event_members?.forEach(member => {
-          externalEvents.push({
-            user_id: member.user_id,
-            date: event.date,
-          });
+    console.log('=== INICIO fetchMemberExternalEvents ===');
+    console.log('GroupId actual:', groupId);
+    
+    // Realizamos la consulta de eventos externos
+    const fullQuery = await supabase
+      .from('events')
+      .select(`
+        id,
+        date,
+        group_id,
+        name,
+        event_members (
+          user_id
+        )
+      `)
+      .neq('group_id', groupId);
+    
+    console.log('4. Query completa:', fullQuery.data);
+    
+    if (fullQuery.error) {
+      console.error('Error al obtener eventos externos:', fullQuery.error);
+      return;
+    }
+    
+    // Procesamos los datos para obtener un array de { user_id, date }
+    const externalEventsData = fullQuery.data || [];
+    const formattedExternalEvents: { user_id: string; date: string; }[] = [];
+    
+    externalEventsData.forEach(event => {
+      event.event_members?.forEach(member => {
+        formattedExternalEvents.push({
+          user_id: member.user_id,
+          date: event.date,
         });
       });
-      setMemberExternalEvents(externalEvents);
-    }
+    });
+    
+    // Actualizamos el estado con los eventos externos formateados
+    setMemberExternalEvents(formattedExternalEvents);
+    
+    console.log('Eventos externos formateados:', formattedExternalEvents);
+    console.log('=== FIN fetchMemberExternalEvents ===');
   };
+  
 
   const fetchAllAvailabilities = async () => {
     if (!groupId) return;
@@ -206,7 +223,7 @@ useEffect(() => {
               memberName: member?.name || 'Unknown Member',
               dates,
               instruments: member?.instruments || [],
-              roleInBand: member?.role_in_band || 'principal'
+              roleInBand: member?.role_in_group || 'principal'
             };
           });
 
@@ -218,24 +235,44 @@ useEffect(() => {
   };
 
   const isMemberAvailableOnDate = (member: GroupMember, date: Date) => {
-    // Check if member has any events on this date
-    const hasEventOnDate = memberEvents.some(event => 
-      event.user_id === member.user_id && 
-      isSameDay(new Date(event.date), date)
-    );
+    console.log(`\nVerificando disponibilidad para el miembro: ${member.name} (ID: ${member.user_id}) en la fecha: ${format(date, 'yyyy-MM-dd')}`);
+    
+    // Verificar si el miembro tiene eventos en este grupo
+    const hasGroupEventOnDate = memberEvents.some(event => {
+      const eventDate = new Date(event.date);
+      const result = (event.user_id === member.user_id) && isSameDay(eventDate, date);
+      if (result) {
+        console.log(`- Tiene un evento en el grupo actual el día: ${format(eventDate, 'yyyy-MM-dd')}`);
+      }
+      return result;
+    });
 
-    if (hasEventOnDate) {
+    if (hasGroupEventOnDate) {
+      console.log(`=> El miembro ${member.name} no está disponible debido a un evento en el grupo actual.`);
       return false;
     }
 
-    // Check member's availability
-    const memberAvailability = availabilities.find(a => 
-      a.userId === member.user_id
-    );
+    // Verificar si el miembro tiene eventos en otros grupos
+    const hasExternalEventOnDate = memberExternalEvents.some(event => {
+      const eventDate = new Date(event.date);
+      const result = (event.user_id === member.user_id) && isSameDay(eventDate, date);
+      if (result) {
+        console.log(`- Tiene un evento en otra banda el día: ${format(eventDate, 'yyyy-MM-dd')}`);
+      }
+      return result;
+    });
 
-    return memberAvailability?.dates.some(d => 
-      isSameDay(d, date)
-    ) ?? false;
+    if (hasExternalEventOnDate) {
+      console.log(`=> El miembro ${member.name} no está disponible debido a un evento en otra banda.`);
+      return false;
+    }
+
+    // Verificar la disponibilidad del miembro
+    const memberAvailability = availabilities.find(a => a.userId === member.user_id);
+    const isAvailable = memberAvailability?.dates.some(d => isSameDay(d, date)) ?? false;
+    console.log(`- Disponibilidad marcada: ${isAvailable ? 'Sí' : 'No'}`);
+    
+    return isAvailable;
   };
 
   const getEventsForDate = (date: Date) => {
@@ -245,93 +282,131 @@ useEffect(() => {
   };
 
   const calculateGroupAvailability = () => {
-    // Obtenemos todas las fechas relevantes
-    const allDatesSet = new Set<string>();
+    console.log('\n=== INICIO calculateGroupAvailability ===');
+    console.log('Members recibidos:', members);
     
-    // Fechas de disponibilidad de los miembros
+    const allDatesSet = new Set<string>();
+    console.log('1. Creando conjunto de fechas...');
+    
+    const availableDates: Date[] = [];
+    const notAvailableDates: Date[] = [];
+    
+    const principalMembers = members.filter(m => m.role_in_group === 'principal');
+    console.log('4. Miembros principales encontrados:', principalMembers.length);
+    console.log('5. Nombres de principales:', principalMembers.map(m => m.name));
+    
     availabilities.forEach(member => {
       member.dates.forEach(date => {
         allDatesSet.add(format(date, 'yyyy-MM-dd'));
       });
     });
-
-    // Fechas de eventos externos de los miembros
+    
     memberExternalEvents.forEach(event => {
       allDatesSet.add(format(new Date(event.date), 'yyyy-MM-dd'));
     });
-
+    console.log('3. Fechas incluyendo eventos externos:', Array.from(allDatesSet));
+    
     const allDates = Array.from(allDatesSet).map(dateStr => new Date(dateStr));
-
-    // Miembros principales y sustitutos
-    const principalMembers = members.filter(m => m.role_in_band === 'principal');
-    const substitutes = members.filter(m => m.role_in_band === 'sustituto');
-
-    const availableDates: Date[] = [];
-    const notAvailableDates: Date[] = [];
+    
+    console.log('4. Miembros principales encontrados:', principalMembers.length);
+    console.log('5. Nombres de principales:', principalMembers.map(m => m.name));
+    
+    const substitutes = members.filter(m => m.role_in_group === 'sustituto');
+    console.log('6. Sustitutos encontrados:', substitutes.length);
 
     allDates.forEach(date => {
       const dateStr = format(date, 'yyyy-MM-dd');
-
-      // Miembros principales no disponibles
-      const unavailablePrincipals = principalMembers.filter(principal => {
-        const isAvailable = availabilities
-          .find(a => a.userId === principal.user_id)
-          ?.dates.some(d => isSameDay(d, date)) ?? false;
-
-        const hasExternalEvent = memberExternalEvents.some(event =>
-          event.user_id === principal.user_id &&
+      console.log(`\n=== Analizando fecha: ${dateStr} ===`);
+      console.log('Miembros principales a verificar:', principalMembers.map(m => m.name));
+      
+      // Aquí es donde queremos verificar si llegamos
+      principalMembers.forEach(principal => {
+        console.log(`\nVerificando principal: ${principal.name}`);
+        
+        // Verificar disponibilidad marcada
+        const memberAvail = availabilities.find(a => a.userId === principal.user_id);
+        const hasMarkedAvailability = memberAvail?.dates.some(d => isSameDay(d, date)) ?? false;
+        console.log(`- Disponibilidad marcada: ${hasMarkedAvailability}`);
+        
+        // Verificar eventos en el grupo actual
+        const hasGroupEvent = memberEvents.some(event => 
+          event.user_id === principal.user_id && 
           isSameDay(new Date(event.date), date)
         );
-
-        return !isAvailable || hasExternalEvent;
+        console.log(`- Tiene evento en este grupo: ${hasGroupEvent}`);
+        
+        // Verificar eventos externos
+        const hasExternalEvent = memberExternalEvents.some(event => 
+          event.user_id === principal.user_id && 
+          isSameDay(new Date(event.date), date)
+        );
+        console.log(`- Tiene evento externo: ${hasExternalEvent}`);
+        
+        // Disponibilidad final
+        const isAvailable = hasMarkedAvailability && !hasGroupEvent && !hasExternalEvent;
+        console.log(`=> Disponibilidad final: ${isAvailable}`);
+      });
+      
+      const unavailablePrincipals = principalMembers.filter(principal => {
+        const isAvailable = isMemberAvailableOnDate(principal, date);
+        console.log(`${principal.name} disponible: ${isAvailable}`);
+        return !isAvailable;
       });
 
+      console.log(`\nPrincipales NO disponibles (${unavailablePrincipals.length}):`, 
+        unavailablePrincipals.map(p => p.name));
+
       if (unavailablePrincipals.length === 0) {
-        // Todos los principales están disponibles
+        console.log(`=> La fecha ${dateStr} está disponible para el grupo (todos los principales disponibles).`);
         availableDates.push(date);
       } else {
-        // Verificamos si los sustitutos pueden cubrir a los principales no disponibles
+        console.log(`\nVerificando sustitutos para ${dateStr}...`);
+        
         const canBeSubstituted = unavailablePrincipals.every(principal => {
+          console.log(`\nBuscando sustitutos para ${principal.name}:`);
           const requiredInstruments = principal.instruments.map(i => i.id);
-
-          // Sustitutos disponibles en esta fecha
+          console.log(`- Instrumentos requeridos:`, requiredInstruments);
+          
           const availableSubstitutes = substitutes.filter(sub => {
-            const isAvailable = availabilities
-              .find(a => a.userId === sub.user_id)
-              ?.dates.some(d => isSameDay(d, date)) ?? false;
-
-            const hasExternalEvent = memberExternalEvents.some(event =>
-              event.user_id === sub.user_id &&
-              isSameDay(new Date(event.date), date)
-            );
-
-            return isAvailable && !hasExternalEvent;
+            const isAvailable = isMemberAvailableOnDate(sub, date);
+            console.log(`- Sustituto ${sub.name}: Disponible=${isAvailable}`);
+            return isAvailable;
           });
-
-          // Verificamos si algún sustituto puede cubrir los instrumentos necesarios
-          return availableSubstitutes.some(sub => {
+          
+          console.log(`- Sustitutos disponibles:`, availableSubstitutes.map(s => s.name));
+          
+          const canCoverInstruments = availableSubstitutes.some(sub => {
             const subInstruments = sub.instruments.map(i => i.id);
-            return requiredInstruments.every(instrId => subInstruments.includes(instrId));
+            const covers = requiredInstruments.every(instrId => subInstruments.includes(instrId));
+            console.log(`  * ${sub.name} puede cubrir instrumentos: ${covers}`);
+            return covers;
           });
+
+          console.log(`=> ${principal.name} puede ser sustituido: ${canCoverInstruments}`);
+          return canCoverInstruments;
         });
 
         if (canBeSubstituted) {
-          // Los sustitutos pueden cubrir a los principales no disponibles
+          console.log(`=> La fecha ${dateStr} está disponible mediante sustituciones.`);
           availableDates.push(date);
         } else {
-          // No hay sustitutos disponibles para cubrir a los principales
+          console.log(`=> La fecha ${dateStr} NO está disponible para el grupo.`);
           notAvailableDates.push(date);
         }
       }
     });
 
+    console.log('\n=== RESUMEN FINAL ===');
+    console.log('Fechas disponibles:', availableDates.map(d => format(d, 'yyyy-MM-dd')));
+    console.log('Fechas NO disponibles:', notAvailableDates.map(d => format(d, 'yyyy-MM-dd')));
+    
     setGroupAvailableDates(availableDates);
     setGroupNotAvailableDates(notAvailableDates);
   };
 
   const canManageOtherMembers = () => {
     const currentMember = members.find(m => m.user_id === user?.id);
-    return isAdmin || currentMember?.role_in_band === 'principal';
+    return isAdmin || currentMember?.role_in_group === 'principal';
   };
 
   const handleDayClick = async (day: Date) => {
@@ -339,7 +414,7 @@ useEffect(() => {
 
     const currentMember = members.find(m => m.user_id === user.id);
     const canManage = isAdmin || 
-      currentMember?.role_in_band === 'principal' || 
+      currentMember?.role_in_group === 'principal' || 
       user.id === (selectedMemberId || user.id);
 
     if (!canManage) {
@@ -429,12 +504,17 @@ useEffect(() => {
         .find(a => a.userId === member.user_id)
         ?.dates.some(d => isSameDay(d, date)) ?? false;
 
-      const hasEvent = groupEvents.some(event => 
+      const hasExternalEvent = memberExternalEvents.some(event => 
         event.user_id === member.user_id && 
         isSameDay(new Date(event.date), date)
       );
 
-      return isAvailable || hasEvent;
+      const hasGroupEvent = groupEvents.some(event => 
+        event.user_id === member.user_id && 
+        isSameDay(new Date(event.date), date)
+      );
+
+      return isAvailable || hasGroupEvent;
     });
   }
 
@@ -575,7 +655,7 @@ useEffect(() => {
 
       const membersForDay = getMembersForDay(date);
       const unavailablePrincipals = members
-        .filter(m => m.role_in_band === 'principal')
+        .filter(m => m.role_in_group === 'principal')
         .filter(principal => !membersForDay.some(m => m.user_id === principal.user_id));
 
       if (unavailablePrincipals.length === 0) {
