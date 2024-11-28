@@ -45,28 +45,30 @@ export default function EventsList({
 
   const fetchEvents = async () => {
     try {
-      const eventsData = await safeSupabaseRequest(
-        () =>
-          supabase
-            .from('events')
-            .select('*')
-            .eq('group_id', groupId)
-            .order('date')
-            .order('time'),
-        'Error loading events'
-      );
+      setLoading(true);
+      const { data: eventsData, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('group_id', groupId)
+        .order('date')
+        .order('time');
+
+      if (error) {
+        throw error;
+      }
 
       if (eventsData) {
         const eventsWithMembers = await Promise.all(
           eventsData.map(async (event) => {
-            const eventMembers = await safeSupabaseRequest(
-              () =>
-                supabase
-                  .from('event_members')
-                  .select('group_member_id, user_id')
-                  .eq('event_id', event.id),
-              'Error loading event members'
-            );
+            const { data: eventMembers, error: membersError } = await supabase
+              .from('event_members')
+              .select('group_member_id, user_id')
+              .eq('event_id', event.id);
+
+            if (membersError) {
+              console.error('Error loading event members:', membersError);
+              return { ...event, members: [] };
+            }
 
             const mappedMembers: EventMember[] =
               eventMembers?.map((em) => {
@@ -90,6 +92,7 @@ export default function EventsList({
       }
     } catch (error) {
       console.error('Error fetching events:', error);
+      toast.error('Error loading events');
     } finally {
       setLoading(false);
     }

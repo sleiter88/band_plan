@@ -30,7 +30,7 @@ export default function GroupManagement() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<ExtendedGroupMember | null>(null);
-  const [memberToDelete, setMemberToDelete] = useState<ExtendedGroupMemberExtendedGroupMember | null>(null);
+  const [memberToDelete, setMemberToDelete] = useState<ExtendedGroupMember | null>(null);
   const [loading, setLoading] = useState(true);
   const [canAddMembers, setCanAddMembers] = useState(false);
   const [userRole, setUserRole] = useState<'admin' | 'user' | null>(null);
@@ -442,10 +442,10 @@ export default function GroupManagement() {
       </div>
 
       {/* Events List */}
-      {group && (
+      {group && id && (
         <div className="mt-6 bg-white rounded-lg shadow-md">
           <EventsList
-            groupId={group.id}
+            groupId={id}
             canManageEvents={userRole === 'admin' || isPrincipalMember}
             availableDates={availableDates}
             members={members}
