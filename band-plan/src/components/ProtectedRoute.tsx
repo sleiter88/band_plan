@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 
 interface ProtectedRouteProps {
@@ -7,10 +7,19 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
+  console.log('ProtectedRoute mounted');
   const { user } = useAuthStore();
+  const location = useLocation();
+  
+  console.log('ProtectedRoute check:', { user, currentPath: location.pathname });
 
   if (!user) {
-    return <Navigate to="/login" />;
+    console.log('No user in ProtectedRoute, redirecting to login');
+    return <Navigate 
+      to="/login" 
+      state={{ returnTo: location.pathname + location.search }}
+      replace
+    />;
   }
 
   return <>{children}</>;

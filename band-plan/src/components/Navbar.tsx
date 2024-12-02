@@ -2,14 +2,19 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { Music2, LogOut } from 'lucide-react';
+import NotificationBell from './NotificationBell';
 
 export default function Navbar() {
   const { user, signOut } = useAuthStore();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
-    await signOut();
-    navigate('/login');
+    try {
+      await signOut();
+      navigate('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   return (
@@ -22,6 +27,7 @@ export default function Navbar() {
           </Link>
           
           <div className="flex items-center space-x-4">
+            {user && <NotificationBell />}
             {user ? (
               <>
                 <span className="text-sm">{user.email}</span>
@@ -40,6 +46,12 @@ export default function Navbar() {
                 </Link>
                 <Link to="/register" className="hover:text-indigo-200 transition-colors">
                   Register
+                </Link>
+                <Link 
+                  to="/accept-invitation?token=test&member_id=test" 
+                  className="text-sm font-medium text-gray-700 hover:text-gray-900"
+                >
+                  Test Invitation
                 </Link>
               </div>
             )}

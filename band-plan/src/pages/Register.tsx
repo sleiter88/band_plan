@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import Input from '../components/Input';
@@ -8,7 +8,11 @@ import { Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 
 export default function Register() {
-  const [email, setEmail] = useState('');
+  const [searchParams] = useSearchParams();
+  const invitedEmail = searchParams.get('email');
+  const token = searchParams.get('token');
+
+  const [email, setEmail] = useState(invitedEmail || '');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -97,7 +101,8 @@ export default function Register() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            placeholder="your@email.com"
+            disabled={!!invitedEmail}
+            placeholder="tu@email.com"
           />
 
           <Input

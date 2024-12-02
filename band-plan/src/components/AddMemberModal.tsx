@@ -35,6 +35,7 @@ export default function AddMemberModal({
   userRole
 }: AddMemberModalProps) {
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [role, setRole] = useState<'principal' | 'sustituto'>('principal');
   const [selectedInstruments, setSelectedInstruments] = useState<string[]>([]);
   const [newInstrumentName, setNewInstrumentName] = useState('');
@@ -44,20 +45,25 @@ export default function AddMemberModal({
   const [isPrincipalMember, setIsPrincipalMember] = useState(false);
   const { user } = useAuthStore();
 
-  useEffect(() => {
-    setLocalInstruments(initialInstruments);
-  }, [initialInstruments]);
+  const getUserInfo = async () => {
+    if (!user) return;
 
-  useEffect(() => {
-    if (user) {
-      checkPrincipalStatus();
-      if (userRole === 'user' && !isPrincipalMember) {
-        getUserName();
-      } else {
-        setName('');
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('name, email')
+        .eq('id', user.id)
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        setName(data.name || '');
+        setEmail(data.email || '');
       }
+    } catch (error) {
+      console.error('Error fetching user info:', error);
     }
-  }, [user, userRole, isPrincipalMember]);
+  };
 
   const checkPrincipalStatus = async () => {
     if (!user) return;
@@ -78,24 +84,21 @@ export default function AddMemberModal({
     }
   };
 
-  const getUserName = async () => {
-    if (!user) return;
+  useEffect(() => {
+    setLocalInstruments(initialInstruments);
+  }, [initialInstruments]);
 
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('name')
-        .eq('id', user.id)
-        .single();
-
-      if (error) throw error;
-      if (data?.name) {
-        setName(data.name);
+  useEffect(() => {
+    if (user) {
+      checkPrincipalStatus();
+      if (userRole === 'user' && !isPrincipalMember) {
+        getUserInfo();
+      } else {
+        setName('');
+        setEmail('');
       }
-    } catch (error) {
-      console.error('Error fetching user name:', error);
     }
-  };
+  }, [user, userRole, isPrincipalMember]);
 
   if (!isOpen || !user) return null;
 
@@ -131,7 +134,11 @@ export default function AddMemberModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      toast.error('Please enter a member name');
+      toast.error('Por favor ingresa un nombre');
+      return;
+    }
+    if (!email.trim()) {
+      toast.error('Por favor ingresa un email');
       return;
     }
 
@@ -157,6 +164,7 @@ export default function AddMemberModal({
         {
           p_group_id: groupId,
           p_name: name,
+          p_email: email.toLowerCase().trim(),
           p_role: isEmptyGroup ? 'principal' : role,
           p_user_id: userRole === 'user' && !isPrincipalMember ? user.id : null,
           p_instruments: existingInstruments,
@@ -166,21 +174,41 @@ export default function AddMemberModal({
 
       if (memberError) throw memberError;
 
-      if (!memberData) {
-        throw new Error('Failed to add group member');
+      try {
+        const { invitation } = memberData;
+        const { error: emailError } = await supabase.functions.invoke('send-invitation-email', {
+          body: {
+            email: invitation.email,
+            token: invitation.token,
+            userExists: invitation.userExists,
+            groupName: invitation.group_name,
+            groupMemberId: memberData.member_id
+          }
+        });
+
+        if (emailError) {
+          console.error('Error sending invitation email:', emailError);
+          toast.error(`Error al enviar la invitación: ${emailError.message}`, {
+            icon: '⚠️',
+            duration: 5000
+          });
+        } else {
+          toast.success('Miembro añadido e invitación enviada');
+        }
+      } catch (emailError: any) {
+        console.error('Error sending invitation:', emailError);
+        toast.error(`Error al enviar la invitación: ${emailError.message || 'Error desconocido'}`, {
+          icon: '⚠️',
+          duration: 5000
+        });
       }
 
-      toast.success(userRole === 'user' && !isPrincipalMember ? 'Successfully joined the group!' : 'Member added successfully!');
       onMemberAdded();
       onClose();
       resetForm();
     } catch (error: any) {
       console.error('Error adding member:', error);
-      if (error.message.includes('permission denied')) {
-        toast.error('You do not have permission to perform this action');
-      } else {
-        toast.error(error.message || 'Failed to add member');
-      }
+      toast.error(error.message || 'Error al añadir miembro');
     } finally {
       setLoading(false);
     }
@@ -219,6 +247,16 @@ export default function AddMemberModal({
             onChange={(e) => setName(e.target.value)}
             required
             placeholder="Enter member name"
+            disabled={isJoining}
+          />
+
+          <Input
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="Enter member email"
             disabled={isJoining}
           />
 
