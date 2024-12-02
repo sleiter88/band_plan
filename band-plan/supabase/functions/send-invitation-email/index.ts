@@ -23,10 +23,7 @@ Deno.serve(async (req) => {
       throw new Error('Faltan datos requeridos')
     }
 
-    const baseUrl = Deno.env.get('FRONTEND_URL')
-    if (!baseUrl) {
-      throw new Error('FRONTEND_URL no está configurado')
-    }
+    const BASE_URL = Deno.env.get('BASE_URL') || 'https://bandplan.netlify.app/';
 
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
     if (!resendApiKey) {
@@ -34,8 +31,8 @@ Deno.serve(async (req) => {
     }
 
     const invitationUrl = userExists 
-      ? `${baseUrl}/accept-invitation?token=${token}`
-      : `${baseUrl}/register?token=${token}&email=${encodeURIComponent(email)}`;
+      ? `${BASE_URL}/accept-invitation?token=${token}`
+      : `${BASE_URL}/register?token=${token}&email=${encodeURIComponent(email)}`;
 
     const resend = new Resend(resendApiKey)
 
