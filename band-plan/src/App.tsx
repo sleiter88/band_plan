@@ -10,13 +10,16 @@ import Dashboard from './pages/Dashboard';
 import GroupManagement from './pages/GroupManagement';
 import ProtectedRoute from './components/ProtectedRoute';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import AcceptInvitation from './pages/AcceptInvitation';
 
 function App() {
   const { setUser, setSession } = useAuthStore();
 
   useEffect(() => {
+    console.log('App mounted');
     // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Initial session:', session);
       setSession(session);
       setUser(session?.user ?? null);
     });
@@ -25,6 +28,7 @@ function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('Auth state changed:', session);
       setSession(session);
       setUser(session?.user ?? null);
     });
@@ -40,6 +44,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/accept-invitation" element={<AcceptInvitation />} />
             <Route path="/" element={
               <ProtectedRoute>
                 <Dashboard />

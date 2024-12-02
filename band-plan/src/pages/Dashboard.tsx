@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { useAuthStore } from '../store/authStore';
 import { Group } from '../types';
 import Button from '../components/Button';
 import { Plus, Users } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
+import { toast } from 'react-hot-toast';
+import { safeSupabaseRequest } from '../lib/supabaseUtils';
 import CreateGroupModal from '../components/CreateGroupModal';
 
 export default function Dashboard() {
@@ -16,66 +18,124 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchGroups();
     if (user) {
       checkAdminRole();
+      fetchGroups();
     }
   }, [user]);
 
   const checkAdminRole = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', user?.id)
-        .single();
+    if (!user) return;
 
-      if (error) throw error;
-      setIsAdmin(data.role === 'admin');
+    try {
+      const response = await safeSupabaseRequest(
+        () => supabase
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .single(),
+        'Error verificando rol de administrador'
+      );
+
+      if (response && 'role' in response) {
+        setIsAdmin(response.role === 'admin');
+      }
     } catch (error) {
       console.error('Error checking admin role:', error);
+      toast.error('Error al verificar permisos de administrador');
     }
   };
 
   const fetchGroups = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('groups')
-        .select('*');
+    if (!user) return;
 
-      if (error) throw error;
-      setGroups(data || []);
-    } catch (error: any) {
-      console.error('Error fetching groups:', error.message);
+    try {
+      setLoading(true);
+      
+      let query;
+      
+      if (isAdmin) {
+        // Si es admin, obtener todos los grupos
+        query = supabase
+          .from('groups')
+          .select('*')
+          .order('created_at', { ascending: false });
+      } else {
+        // Si no es admin, obtener solo los grupos donde es miembro
+        const { data: memberGroups } = await supabase
+          .from('group_members')
+          .select('group_id')
+          .eq('user_id', user.id);
+
+        if (!memberGroups) {
+          setGroups([]);
+          return;
+        }
+
+        const groupIds = memberGroups.map(mg => mg.group_id);
+        
+        if (groupIds.length === 0) {
+          setGroups([]);
+          return;
+        }
+
+        query = supabase
+          .from('groups')
+          .select('*')
+          .in('id', groupIds)
+          .order('created_at', { ascending: false });
+      }
+
+      const response = await safeSupabaseRequest(
+        () => query,
+        'Error cargando grupos'
+      );
+
+      if (response) {
+        setGroups(Array.isArray(response) ? response : []);
+      } else {
+        setGroups([]);
+      }
+    } catch (error) {
+      console.error('Error fetching groups:', error);
+      toast.error('Error al cargar los grupos');
+      setGroups([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGroupClick = (groupId: number) => {
+  const handleGroupClick = (groupId: string) => {
     navigate(`/group/${groupId}`);
   };
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Groups</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Mis Grupos</h1>
         {isAdmin && (
           <Button
             onClick={() => setIsModalOpen(true)}
             className="flex items-center space-x-2"
           >
             <Plus className="w-5 h-5" />
-            <span>Create Group</span>
+            <span>Crear Grupo</span>
           </Button>
         )}
       </div>
 
       {loading ? (
-        <div className="text-center">Loading groups...</div>
+        <div className="text-center py-8 text-gray-500">
+          Cargando grupos...
+        </div>
       ) : groups.length === 0 ? (
-        <div className="text-center text-gray-500">
-          No groups available. {isAdmin ? 'Create one to get started!' : 'Please wait for an admin to create one.'}
+        <div className="text-center py-8">
+          <Users className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+          <p className="text-gray-500">
+            {isAdmin 
+              ? 'No hay grupos disponibles. ¡Crea uno para empezar!' 
+              : 'No perteneces a ningún grupo. Espera a que un administrador te añada a uno.'}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -90,7 +150,7 @@ export default function Dashboard() {
                 <Users className="w-6 h-6 text-indigo-600" />
               </div>
               <p className="text-sm text-gray-500">
-                Click to manage group members and instruments
+                Haz clic para gestionar miembros e instrumentos
               </p>
             </div>
           ))}

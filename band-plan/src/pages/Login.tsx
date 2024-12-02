@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { toast } from 'react-hot-toast';
@@ -12,13 +12,19 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = location.state?.returnTo;
   const { user, setUser } = useAuthStore();
+
+  console.log('Login component state:', { returnTo, location });
 
   useEffect(() => {
     if (user) {
-      navigate('/');
+      const redirectTo = returnTo || '/';
+      console.log('User authenticated, redirecting to:', redirectTo);
+      navigate(redirectTo, { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, returnTo, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +40,10 @@ export default function Login() {
 
       setUser(data.user);
       toast.success('Successfully logged in!');
-      navigate('/');
+      
+      const redirectTo = returnTo || '/';
+      console.log('Login successful, redirecting to:', redirectTo);
+      navigate(redirectTo, { replace: true });
     } catch (error: any) {
       toast.error(error.message || 'Failed to login');
     } finally {
