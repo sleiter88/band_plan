@@ -5,43 +5,50 @@ import { X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 
-interface CreateGroupModalProps {
+interface DeleteGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onGroupCreated: () => void;
-  isAdmin: boolean;
+  onGroupDeleted: () => void;
+  group: {
+    id: string;
+    name: string;
+  };
 }
 
-const CreateGroupModal = ({
+const DeleteGroupModal = ({
   isOpen,
   onClose,
-  onGroupCreated,
-  isAdmin = false,
-}: CreateGroupModalProps) => {
-  const [name, setName] = useState('');
+  onGroupDeleted,
+  group,
+}: DeleteGroupModalProps) => {
+  const [confirmationName, setConfirmationName] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (confirmationName !== group.name) {
+      toast.error('El nombre del grupo no coincide');
+      return;
+    }
 
     try {
       setLoading(true);
       const { error } = await supabase
         .from('groups')
-        .insert([{ name: name.trim() }]);
+        .delete()
+        .eq('id', group.id);
 
       if (error) throw error;
 
-      toast.success('Grupo creado exitosamente');
-      onGroupCreated();
+      toast.success('Grupo eliminado exitosamente');
+      onGroupDeleted();
       onClose();
-      setName('');
     } catch (error) {
       console.error('Error:', error);
-      toast.error('Error al crear el grupo');
+      toast.error('Error al eliminar el grupo');
     } finally {
       setLoading(false);
+      setConfirmationName('');
     }
   };
 
@@ -64,25 +71,25 @@ const CreateGroupModal = ({
             </button>
           </div>
 
-          <Dialog.Title className="text-xl font-semibold mb-4">
-            Crear Nuevo Grupo
+          <Dialog.Title className="text-xl font-semibold text-red-600 mb-4">
+            Eliminar Grupo
           </Dialog.Title>
+
+          <div className="mb-4">
+            <p className="text-gray-700 mb-4">
+              Esta acción no se puede deshacer. Para confirmar, escribe el nombre del grupo:
+              <span className="font-semibold"> {group.name}</span>
+            </p>
+          </div>
 
           <form onSubmit={handleSubmit}>
             <div className="mb-4">
-              <label
-                htmlFor="name"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Nombre del grupo
-              </label>
               <input
                 type="text"
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="Ingresa el nombre del grupo"
+                value={confirmationName}
+                onChange={(e) => setConfirmationName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
+                placeholder="Escribe el nombre del grupo"
                 required
               />
             </div>
@@ -96,8 +103,13 @@ const CreateGroupModal = ({
               >
                 Cancelar
               </Button>
-              <Button type="submit" loading={loading}>
-                Crear Grupo
+              <Button
+                type="submit"
+                loading={loading}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-500"
+                disabled={confirmationName !== group.name}
+              >
+                Eliminar Grupo
               </Button>
             </div>
           </form>
@@ -107,4 +119,4 @@ const CreateGroupModal = ({
   );
 };
 
-export default CreateGroupModal;
+export default DeleteGroupModal; 
