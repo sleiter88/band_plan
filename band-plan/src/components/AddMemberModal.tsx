@@ -46,6 +46,16 @@ export default function AddMemberModal({
   const [isPrincipalMember, setIsPrincipalMember] = useState(false);
   const { user } = useAuthStore();
 
+  const resetForm = () => {
+    setName('');
+    setEmail('');
+    setRole('principal');
+    setSelectedInstruments([]);
+    setNewInstrumentName('');
+    setShowNewInstrumentInput(false);
+    setLocalInstruments([]);
+  };
+
   const getUserInfo = async () => {
     if (!user) return;
 
@@ -242,15 +252,6 @@ export default function AddMemberModal({
     } finally {
       setLoading(false);
     }
-  };
-
-  const resetForm = () => {
-    setName('');
-    setRole('principal');
-    setSelectedInstruments([]);
-    setNewInstrumentName('');
-    setShowNewInstrumentInput(false);
-    setLocalInstruments([]);
   };
 
   const isJoining = userRole === 'user' && !isPrincipalMember;
