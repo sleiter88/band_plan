@@ -30,11 +30,13 @@ interface MemberEvent {
 interface AvailabilityCalendarProps {
   members: GroupMember[];
   onAvailableDatesChange?: (dates: Date[]) => void;
+  groupName?: string;
 }
 
 export default function AvailabilityCalendar({ 
   members,
-  onAvailableDatesChange 
+  onAvailableDatesChange,
+  groupName = 'Sin nombre'
 }: AvailabilityCalendarProps) {
   const { id: groupId } = useParams<{ id: string }>();
   const [availabilities, setAvailabilities] = useState<MemberAvailability[]>([]);
@@ -668,7 +670,7 @@ useEffect(() => {
     }, {} as Record<string, { withPrincipals: Date[], withSubstitutes: Date[] }>);
 
     // Generar el contenido del archivo
-    let content = "FECHAS DISPONIBLES DEL GRUPO\n\n";
+    let content = `FECHAS DISPONIBLES DEL GRUPO ${groupName.toUpperCase()}\n\n`;
 
     if (Object.keys(datesByMonth).length === 0) {
       content += "No hay fechas disponibles sin eventos programados.\n";
@@ -701,7 +703,7 @@ useEffect(() => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `disponibilidad_grupo_${format(new Date(), 'dd-MM-yyyy')}.txt`;
+    link.download = `disponibilidad_${groupName.toLowerCase().replace(/\s+/g, '_')}_${format(new Date(), 'dd-MM-yyyy')}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

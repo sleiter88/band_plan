@@ -437,6 +437,7 @@ export default function GroupManagement() {
             <AvailabilityCalendar 
               members={members} 
               onAvailableDatesChange={setAvailableDates}
+              groupName={group.name}
             />
           </div>
         </div>
