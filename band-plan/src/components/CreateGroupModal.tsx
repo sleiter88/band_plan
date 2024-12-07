@@ -20,6 +20,7 @@ const CreateGroupModal = ({
 }: CreateGroupModalProps) => {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [roles, setRoles] = useState<Role[]>([]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,6 +44,15 @@ const CreateGroupModal = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchRoles = async () => {
+    const { data, error } = await supabase
+      .from('roles')
+      .select('*');
+
+    if (error) throw error;
+    setRoles(data);
   };
 
   return (

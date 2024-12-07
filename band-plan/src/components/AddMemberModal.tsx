@@ -21,6 +21,7 @@ interface NewInstrument {
   id: string;
   name: string;
   isNew: true;
+  group_id: string;
 }
 
 type LocalInstrument = Instrument | NewInstrument;
@@ -41,7 +42,7 @@ export default function AddMemberModal({
   const [newInstrumentName, setNewInstrumentName] = useState('');
   const [showNewInstrumentInput, setShowNewInstrumentInput] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [localInstruments, setLocalInstruments] = useState<LocalInstrument[]>(initialInstruments);
+  const [localInstruments, setLocalInstruments] = useState<LocalInstrument[]>([]);
   const [isPrincipalMember, setIsPrincipalMember] = useState(false);
   const { user } = useAuthStore();
 
@@ -84,9 +85,34 @@ export default function AddMemberModal({
     }
   };
 
+  const loadExistingRoles = async () => {
+    try {
+      const { data: existingRoles, error } = await supabase
+        .from('roles')
+        .select('*')
+        .eq('group_id', groupId)
+        .order('name');
+
+      if (error) throw error;
+
+      setLocalInstruments(existingRoles || []);
+    } catch (error) {
+      console.error('Error loading roles:', error);
+      toast.error('Error al cargar los roles');
+    }
+  };
+
   useEffect(() => {
-    setLocalInstruments(initialInstruments);
-  }, [initialInstruments]);
+    if (isOpen) {
+      loadExistingRoles();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      resetForm();
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (user) {
@@ -104,7 +130,7 @@ export default function AddMemberModal({
 
   const handleAddNewInstrument = () => {
     if (!newInstrumentName.trim()) {
-      toast.error('Please enter an instrument name');
+      toast.error('Por favor ingresa un nombre para el rol');
       return;
     }
 
@@ -113,7 +139,7 @@ export default function AddMemberModal({
     );
 
     if (exists) {
-      toast.error('This instrument already exists');
+      toast.error('Este rol ya existe en el grupo');
       return;
     }
 
@@ -121,14 +147,15 @@ export default function AddMemberModal({
     const newInstrument: NewInstrument = {
       id: tempId,
       name: newInstrumentName.trim(),
-      isNew: true
+      isNew: true,
+      group_id: groupId
     };
 
     setLocalInstruments([...localInstruments, newInstrument]);
     setSelectedInstruments([...selectedInstruments, tempId]);
     setNewInstrumentName('');
     setShowNewInstrumentInput(false);
-    toast.success('Instrument added and selected');
+    toast.success('Rol añadido y seleccionado');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -176,25 +203,28 @@ export default function AddMemberModal({
 
       try {
         const { invitation } = memberData;
+        console.log('Datos de invitación:', invitation);
+        
+        if (!invitation || !invitation.token) {
+          throw new Error('No se recibieron los datos de invitación correctamente');
+        }
+
         const { error: emailError } = await supabase.functions.invoke('send-invitation-email', {
           body: {
             email: invitation.email,
             token: invitation.token,
             userExists: invitation.userExists,
-            groupName: invitation.group_name,
-            groupMemberId: memberData.member_id
+            groupName: invitation.groupName,
+            groupMemberId: invitation.groupMemberId
           }
         });
 
         if (emailError) {
           console.error('Error sending invitation email:', emailError);
-          toast.error(`Error al enviar la invitación: ${emailError.message}`, {
-            icon: '⚠️',
-            duration: 5000
-          });
-        } else {
-          toast.success('Miembro añadido e invitación enviada');
+          throw new Error(`Error al enviar la invitación: ${emailError.message}`);
         }
+
+        toast.success('Miembro añadido e invitación enviada');
       } catch (emailError: any) {
         console.error('Error sending invitation:', emailError);
         toast.error(`Error al enviar la invitación: ${emailError.message || 'Error desconocido'}`, {
@@ -220,7 +250,7 @@ export default function AddMemberModal({
     setSelectedInstruments([]);
     setNewInstrumentName('');
     setShowNewInstrumentInput(false);
-    setLocalInstruments(initialInstruments);
+    setLocalInstruments([]);
   };
 
   const isJoining = userRole === 'user' && !isPrincipalMember;
@@ -329,11 +359,14 @@ export default function AddMemberModal({
             <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3">
               {localInstruments.length === 0 ? (
                 <p className="text-sm text-gray-500">
-                  No instruments available. Add one above.
+                  No hay roles disponibles. Añade uno arriba.
                 </p>
               ) : (
                 localInstruments.map((instrument) => (
-                  <label key={instrument.id} className="flex items-center space-x-2 hover:bg-gray-50 p-1 rounded">
+                  <label 
+                    key={instrument.id} 
+                    className="flex items-center space-x-2 hover:bg-gray-50 p-1 rounded"
+                  >
                     <input
                       type="checkbox"
                       checked={selectedInstruments.includes(instrument.id)}
@@ -341,7 +374,9 @@ export default function AddMemberModal({
                         if (e.target.checked) {
                           setSelectedInstruments([...selectedInstruments, instrument.id]);
                         } else {
-                          setSelectedInstruments(selectedInstruments.filter(id => id !== instrument.id));
+                          setSelectedInstruments(
+                            selectedInstruments.filter(id => id !== instrument.id)
+                          );
                         }
                       }}
                       className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
@@ -349,7 +384,9 @@ export default function AddMemberModal({
                     <span className="flex items-center capitalize">
                       <Music className="w-3 h-3 mr-1" />
                       {instrument.name}
-                      {'isNew' in instrument && <span className="ml-2 text-xs text-indigo-600">(New)</span>}
+                      {'isNew' in instrument && (
+                        <span className="ml-2 text-xs text-indigo-600">(Nuevo)</span>
+                      )}
                     </span>
                   </label>
                 ))

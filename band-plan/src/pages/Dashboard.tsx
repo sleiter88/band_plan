@@ -24,11 +24,15 @@ export default function Dashboard() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      fetchGroups();
-      checkAdminStatus();
-    }
-  }, [user]);
+    const initializeDashboard = async () => {
+      if (user) {
+        await checkAdminStatus();
+        await fetchGroups();
+      }
+    };
+
+    initializeDashboard();
+  }, [user, isAdmin]);
 
   const fetchGroups = async () => {
     if (!user) return;
@@ -57,11 +61,9 @@ export default function Dashboard() {
 
         const groupsWithRole = (groupsData || []).map(group => ({
           ...group,
-          userRole: group.created_by === user.id 
-            ? 'creator' 
-            : memberGroupIds.has(group.id)
-              ? 'member'
-              : 'none'
+          userRole: memberGroupIds.has(group.id)
+            ? 'member'
+            : 'none'
         }));
 
         setGroups(groupsWithRole);
@@ -88,11 +90,9 @@ export default function Dashboard() {
 
       const groupsWithRole = (groupsData || []).map(group => ({
         ...group,
-        userRole: group.created_by === user.id 
-          ? 'creator' 
-          : memberGroupIds.has(group.id)
-            ? 'member'
-            : 'none'
+        userRole: memberGroupIds.has(group.id)
+          ? 'member'
+          : 'none'
       }));
 
       setGroups(groupsWithRole);
@@ -134,9 +134,9 @@ export default function Dashboard() {
 
   // Función auxiliar para agrupar los grupos por rol
   const groupedGroups = () => {
-    const created = groups.filter(g => g.userRole === 'creator');
-    const member = groups.filter(g => g.userRole === 'member');
-    const other = isAdmin ? groups.filter(g => g.userRole === 'none') : [];
+    const created = groups.filter(g => g.created_by === user?.id);
+    const member = groups.filter(g => g.userRole === 'member' && g.created_by !== user?.id);
+    const other = isAdmin ? groups.filter(g => g.userRole === 'none' && g.created_by !== user?.id) : [];
     
     return { created, member, other };
   };
@@ -213,7 +213,7 @@ export default function Dashboard() {
           {isAdmin && groupedGroups().other.length > 0 && (
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                Todos los grupos
+                Otros grupos
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {groupedGroups().other.map((group) => (
@@ -283,20 +283,22 @@ const GroupCard = ({ group, user, isAdmin, onDelete, onClick }: GroupCardProps) 
           )}
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        <span className={`text-sm px-2 py-1 rounded-full ${
-          group.userRole === 'creator' 
-            ? 'bg-indigo-100 text-indigo-700'
-            : group.userRole === 'member'
-              ? 'bg-green-100 text-green-700'
-              : 'bg-gray-100 text-gray-700'
-        }`}>
-          {group.userRole === 'creator' 
-            ? 'Creador' 
-            : group.userRole === 'member' 
-              ? 'Miembro' 
-              : 'Grupo'}
-        </span>
+      <div className="flex items-center gap-2 flex-wrap">
+        {group.created_by === user?.id && (
+          <span className="text-sm px-2 py-1 rounded-full bg-indigo-100 text-indigo-700">
+            Creador
+          </span>
+        )}
+        {group.userRole === 'member' && (
+          <span className="text-sm px-2 py-1 rounded-full bg-green-100 text-green-700">
+            Miembro
+          </span>
+        )}
+        {group.userRole === 'none' && (
+          <span className="text-sm px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+            Grupo
+          </span>
+        )}
       </div>
     </div>
   );

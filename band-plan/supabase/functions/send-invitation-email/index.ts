@@ -17,26 +17,48 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { email, token, userExists, groupName, groupMemberId } = await req.json()
+    const requestData = await req.json()
+    console.log('Datos recibidos:', JSON.stringify(requestData, null, 2))
     
-    if (!email || !token || userExists === undefined || !groupName || !groupMemberId) {
-      throw new Error('Faltan datos requeridos')
+    const { email, token, userExists, groupName, groupMemberId } = requestData
+    
+    // Validación más detallada de cada campo
+    const missingFields: string[] = []
+    if (!email || typeof email !== 'string') missingFields.push('email')
+    if (!token || token === null) missingFields.push('token')
+    if (userExists === undefined || userExists === null) missingFields.push('userExists')
+    if (!groupName || typeof groupName !== 'string') missingFields.push('groupName')
+    if (!groupMemberId || typeof groupMemberId !== 'string') missingFields.push('groupMemberId')
+
+    if (missingFields.length > 0) {
+      throw new Error(`Faltan los siguientes campos requeridos o son inválidos: ${missingFields.join(', ')}. 
+        Valores recibidos: 
+        email: ${email}
+        token: ${token}
+        userExists: ${userExists}
+        groupName: ${groupName}
+        groupMemberId: ${groupMemberId}
+      `)
     }
 
     const BASE_URL = Deno.env.get('BASE_URL') || 'https://bandplan.netlify.app/';
+    console.log('BASE_URL:', BASE_URL);
 
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
     if (!resendApiKey) {
       throw new Error('RESEND_API_KEY no está configurado')
     }
+    console.log('RESEND_API_KEY está configurado');
 
     const invitationUrl = userExists 
       ? `${BASE_URL}/accept-invitation?token=${token}`
       : `${BASE_URL}/register?token=${token}&email=${encodeURIComponent(email)}`;
+    
+    console.log('URL de invitación generada:', invitationUrl);
 
     const resend = new Resend(resendApiKey)
 
-    // Enviar el email
+    console.log('Intentando enviar email...');
     const { data, error: resendError } = await resend.emails.send({
       from: 'Band Plan <team@band.faridproject.com>',
       to: email,
@@ -67,8 +89,11 @@ Deno.serve(async (req) => {
     })
 
     if (resendError) {
+      console.error('Error de Resend:', resendError);
       throw resendError
     }
+
+    console.log('Email enviado exitosamente:', data);
 
     return new Response(
       JSON.stringify({ 
@@ -84,11 +109,12 @@ Deno.serve(async (req) => {
       }
     )
   } catch (error) {
-    console.error('Error en send-invitation-email:', error)
+    console.error('Error detallado:', error);
     return new Response(
       JSON.stringify({ 
         error: error.message,
-        details: 'Error procesando la invitación'
+        details: 'Error procesando la invitación',
+        stack: error.stack
       }),
       { 
         status: 400,

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Event, GroupMember } from '../types';
+import { Event, GroupMember, Role } from '../types';
 import { Calendar, Clock, Trash2, Edit2, Users, MapPin } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isFuture, startOfDay } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import Button from './Button';
 import EventModal from './EventModal';
@@ -38,6 +38,7 @@ export default function EventsList({
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
 
   useEffect(() => {
     fetchEvents();
@@ -155,8 +156,8 @@ export default function EventsList({
     return <div className="text-center py-4">Cargando eventos...</div>;
   }
 
-  const groupEventsByMonth = () => {
-    const grouped = events.reduce((acc, event) => {
+  const groupEventsByMonth = (eventsToGroup: EventWithMembers[]) => {
+    const grouped = eventsToGroup.reduce((acc, event) => {
       const monthYear = format(parseISO(event.date), 'MMMM yyyy');
       if (!acc[monthYear]) {
         acc[monthYear] = [];
@@ -208,6 +209,18 @@ export default function EventsList({
       : location;
   };
 
+  const futureEvents = events.filter(event => 
+    isFuture(startOfDay(parseISO(event.date)))
+  );
+
+  const pastEvents = events.filter(event => 
+    !isFuture(startOfDay(parseISO(event.date)))
+  );
+
+  const getMemberRole = (member: GroupMember) => {
+    return member.role?.name || 'Sin rol';
+  };
+
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-lg shadow-sm border border-gray-100">
@@ -227,87 +240,124 @@ export default function EventsList({
               <p>No hay eventos programados</p>
             </div>
           ) : (
-            <div className="mt-4 space-y-6">
-              {groupEventsByMonth().map(([monthYear, monthEvents]) => (
-                <div key={monthYear} className="space-y-2">
-                  <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">
-                    {monthYear}
-                  </h3>
-                  <div className="space-y-1">
-                    {monthEvents.map((event) => (
-                      <div
-                        key={event.id}
-                        className="bg-white rounded-lg shadow-sm border border-gray-100 hover:border-gray-200 transition-colors"
-                      >
-                        <div className="p-3">
-                          <div className="flex items-center justify-between gap-4">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-3">
-                                <div className="flex-shrink-0 w-12 text-center">
-                                  <div className="text-lg font-bold text-gray-900">
-                                    {format(parseISO(event.date), 'd')}
-                                  </div>
-                                  <div className="text-xs text-gray-500 uppercase">
-                                    {format(parseISO(event.date), 'EEE')}
-                                  </div>
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <h3 className="text-sm font-medium text-gray-900 truncate">
-                                    {event.name}
-                                  </h3>
-                                  <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
-                                    <div className="flex items-center">
-                                      <Clock className="w-3 h-3 mr-1" />
-                                      {format(
-                                        parseISO(`2000-01-01T${event.time}`),
-                                        'h:mm a'
-                                      )}
+            <div className="mt-4">
+              <div className="border-b border-gray-200">
+                <nav className="-mb-px flex space-x-8">
+                  <button
+                    onClick={() => setActiveTab('upcoming')}
+                    className={`${
+                      activeTab === 'upcoming'
+                        ? 'border-indigo-500 text-indigo-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2`}
+                  >
+                    <span>Próximos eventos</span>
+                    {futureEvents.length > 0 && (
+                      <span className={`${
+                        activeTab === 'upcoming' ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-900'
+                      } py-0.5 px-2.5 rounded-full text-xs font-medium`}>
+                        {futureEvents.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('past')}
+                    className={`${
+                      activeTab === 'past'
+                        ? 'border-indigo-500 text-indigo-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2`}
+                  >
+                    <span>Eventos pasados</span>
+                    {pastEvents.length > 0 && (
+                      <span className={`${
+                        activeTab === 'past' ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-900'
+                      } py-0.5 px-2.5 rounded-full text-xs font-medium`}>
+                        {pastEvents.length}
+                      </span>
+                    )}
+                  </button>
+                </nav>
+              </div>
+
+              <div className="mt-4 space-y-6">
+                {groupEventsByMonth(
+                  activeTab === 'upcoming' ? futureEvents : pastEvents
+                ).map(([monthYear, monthEvents]) => (
+                  <div key={monthYear} className="space-y-2">
+                    <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">
+                      {monthYear}
+                    </h3>
+                    <div className="space-y-1">
+                      {monthEvents.map((event) => (
+                        <div
+                          key={event.id}
+                          className="bg-white rounded-lg shadow-sm border border-gray-100 hover:border-gray-200 transition-colors"
+                        >
+                          <div className="p-3">
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex-shrink-0 w-12 text-center">
+                                    <div className="text-lg font-bold text-gray-900">
+                                      {format(parseISO(event.date), 'd')}
                                     </div>
-                                    <div className="flex items-center">
-                                      <Users className="w-3 h-3 mr-1" />
-                                      {event.members.length}
+                                    <div className="text-xs text-gray-500 uppercase">
+                                      {format(parseISO(event.date), 'EEE')}
                                     </div>
-                                    {event.location && (
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <h3 className="text-sm font-medium text-gray-900 truncate">
+                                      {event.name}
+                                    </h3>
+                                    <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
                                       <div className="flex items-center">
-                                        <MapPin className="w-3 h-3 mr-1" />
-                                        {truncateLocation(event.location.name)}
+                                        <Clock className="w-3 h-3 mr-1" />
+                                        {format(
+                                          parseISO(`2000-01-01T${event.time}`),
+                                          'h:mm a'
+                                        )}
                                       </div>
-                                    )}
+                                      <div className="flex items-center">
+                                        <Users className="w-3 h-3 mr-1" />
+                                        {event.members.length}
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
+                                {renderEventMembers(event)}
+                                {event.notes && (
+                                  <p className="mt-1 text-xs text-gray-500 line-clamp-1">
+                                    {event.notes}
+                                  </p>
+                                )}
                               </div>
-                              {renderEventMembers(event)}
-                              {event.notes && (
-                                <p className="mt-1 text-xs text-gray-500 line-clamp-1">
-                                  {event.notes}
-                                </p>
+                              {canManageEvents && (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleEdit(event)}
+                                    className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                                    title="Editar evento"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(event.id)}
+                                    className="p-1 text-red-400 hover:text-red-600 rounded-full hover:bg-red-50"
+                                    title="Eliminar evento"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
                               )}
                             </div>
-                            {canManageEvents && (
-                              <div className="flex items-center gap-1">
-                                <button
-                                  onClick={() => handleEdit(event)}
-                                  className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
-                                  title="Editar evento"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(event.id)}
-                                  className="p-1 text-red-400 hover:text-red-600 rounded-full hover:bg-red-50"
-                                  title="Eliminar evento"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            )}
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </div>

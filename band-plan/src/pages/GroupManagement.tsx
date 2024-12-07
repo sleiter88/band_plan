@@ -103,8 +103,8 @@ export default function GroupManagement() {
           .from('group_members')
           .select(`
             *,
-            group_member_instruments!group_member_instruments_group_member_id_fkey (
-              instrument:instruments (
+            group_member_roles!group_member_roles_group_member_id_fkey (
+              role:roles (
                 id,
                 name
               )
@@ -119,11 +119,11 @@ export default function GroupManagement() {
       if (membersData) {
         const transformedMembers: ExtendedGroupMember[] = membersData.map(member => ({
           ...member,
-          instruments: (member.group_member_instruments || [])
-            .filter(gmi => gmi?.instrument)
-            .map(gmi => ({
-              id: gmi.instrument.id,
-              name: gmi.instrument.name
+          instruments: (member.group_member_roles || [])
+            .filter(gmr => gmr?.role)
+            .map(gmr => ({
+              id: gmr.role.id,
+              name: gmr.role.name
             }))
         }));
 
@@ -132,10 +132,11 @@ export default function GroupManagement() {
 
       const instrumentsData = await safeSupabaseRequest(
         () => supabase
-          .from('instruments')
+          .from('roles')
           .select('*')
+          .eq('group_id', id)
           .order('name'),
-        'Error loading instruments'
+        'Error loading roles'
       );
 
       if (instrumentsData) {
