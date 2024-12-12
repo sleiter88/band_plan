@@ -35,12 +35,12 @@ export interface GroupMemberInstrument {
 
 export interface Event {
   id: number;
-  group_id: string;
   name: string;
   date: string;
   time: string;
-  datetime: string;
+  group_id: string;
   notes?: string;
+  location?: string;
   created_by: string;
   created_at: string;
   updated_at: string;

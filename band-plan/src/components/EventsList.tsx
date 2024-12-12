@@ -169,6 +169,41 @@ export default function EventsList({
     return Object.entries(grouped);
   };
 
+  const getLocationText = (location: string | undefined): string => {
+    if (!location) return '';
+    
+    console.log('Location raw:', location);
+    
+    // Si es un objeto directo (no un string)
+    if (typeof location === 'object' && location !== null) {
+      return location.name || String(location);
+    }
+
+    if (typeof location !== 'string') {
+      return String(location);
+    }
+
+    // Si es un string que representa un objeto
+    if (location.startsWith('{') || location.startsWith('[')) {
+      try {
+        const locationData = JSON.parse(location);
+        return locationData.name || locationData.formatted_address || locationData.description || String(locationData);
+      } catch (error) {
+        console.log('Location parse error:', error);
+        return location;
+      }
+    }
+
+    // Si es un string normal
+    return location;
+  };
+
+  const openLocation = (location: string | undefined) => {
+    if (!location) return;
+    const query = getLocationText(location);
+    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
+  };
+
   const renderEventMembers = (event: EventWithMembers) => {
     const principalMembers = event.members.filter(m => m.role_in_group === 'principal');
     const substituteMembers = event.members.filter(m => m.role_in_group === 'sustituto');
@@ -199,11 +234,35 @@ export default function EventsList({
             ))}
           </div>
         )}
+
+        {event.location && (
+          <div className="flex items-center gap-1 mt-1">
+            <button
+              onClick={() => openLocation(event.location)}
+              className="inline-flex items-center text-xs text-gray-600 hover:text-indigo-600"
+            >
+              <MapPin className="w-3 h-3 mr-1" />
+              <span className="underline">
+                {truncateLocation(getLocationText(event.location))}
+              </span>
+            </button>
+          </div>
+        )}
       </div>
     );
   };
 
-  const truncateLocation = (location: string, maxLength: number = 15) => {
+  const truncateLocation = (location: string, maxLength: number = 40) => {
+    if (!location) return '';
+    
+    // Si la ubicación tiene una coma, mostrar solo la primera parte
+    if (location.includes(',')) {
+      const firstPart = location.split(',')[0];
+      if (firstPart.length <= maxLength) return firstPart;
+      return `${firstPart.slice(0, maxLength)}...`;
+    }
+    
+    // Si no tiene coma, truncar normalmente
     return location.length > maxLength 
       ? `${location.slice(0, maxLength)}...` 
       : location;

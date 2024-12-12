@@ -180,7 +180,7 @@ export default function AddMemberModal({
     }
 
     if (selectedInstruments.length === 0) {
-      toast.error('Please select at least one instrument');
+      toast.error('Por favor selecciona al menos un rol');
       return;
     }
 
@@ -194,7 +194,12 @@ export default function AddMemberModal({
           inst.isNew && 
           selectedInstruments.includes(inst.id)
         )
-        .map(inst => inst.name);
+        .map(inst => ({
+          name: inst.name,
+          group_id: groupId
+        }));
+
+      const formattedNewInstruments = newInstruments.map(inst => `(${inst.name}, ${groupId})`);
 
       const { data: memberData, error: memberError } = await supabase.rpc(
         'add_group_member_with_instruments',
@@ -205,7 +210,7 @@ export default function AddMemberModal({
           p_role: isEmptyGroup ? 'principal' : role,
           p_user_id: userRole === 'user' && !isPrincipalMember ? user.id : null,
           p_instruments: existingInstruments,
-          p_new_instruments: newInstruments
+          p_new_instruments: newInstruments.map(inst => inst.name)
         }
       );
 

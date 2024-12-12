@@ -32,20 +32,6 @@ interface EventMember {
   sync_calendar: boolean;
 }
 
-interface Location {
-  display_name: string;
-  lat: string;
-  lon: string;
-}
-
-interface LocationData {
-  name: string;
-  coordinates: {
-    latitude: string;
-    longitude: string;
-  };
-}
-
 // Añadir esta variable fuera del componente
 let currentSearchController: AbortController | null = null;
 
@@ -384,13 +370,7 @@ export default function EventModal({
         })(),
         notes: notes.trim() || null,
         created_by: user.id,
-        location: selectedLocation ? {
-          name: selectedLocation.display_name,
-          coordinates: {
-            latitude: selectedLocation.lat,
-            longitude: selectedLocation.lon
-          }
-        } : null,
+        location: selectedLocation ? selectedLocation.display_name : location,
       };
 
       let eventId;
