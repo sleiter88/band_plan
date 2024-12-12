@@ -4,14 +4,15 @@
 
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { Resend } from "https://esm.sh/resend@2.1.0"
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { Resend } from "npm:resend@2.1.0"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-Deno.serve(async (req) => {
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -41,7 +42,9 @@ Deno.serve(async (req) => {
       `)
     }
 
-    const BASE_URL = Deno.env.get('BASE_URL') || 'https://bandplan.netlify.app/';
+    const BASE_URL = new URL(
+      Deno.env.get('BASE_URL') || 'https://bandplan.netlify.app'
+    ).toString().replace(/\/$/, '');
     console.log('BASE_URL:', BASE_URL);
 
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
