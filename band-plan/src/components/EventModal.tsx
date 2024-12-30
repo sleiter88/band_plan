@@ -65,6 +65,16 @@ export default function EventModal({
       setDate(event.date);
       setTime(event.time);
       setNotes(event.notes || '');
+      setLocation(event.location || '');
+      if (event.location) {
+        setSelectedLocation({
+          display_name: event.location,
+          lat: '',
+          lon: '',
+          type: '',
+          class: ''
+        });
+      }
       loadEventMembers();
     } else if (selectedDate) {
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
@@ -627,10 +637,14 @@ export default function EventModal({
                   <MapPin className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <span className="block text-sm font-medium text-gray-900">
-                      Ubicación seleccionada
+                      {typeof selectedLocation.display_name === 'string' && selectedLocation.display_name.includes(',')
+                        ? selectedLocation.display_name.split(',')[0]
+                        : selectedLocation.display_name}
                     </span>
                     <span className="block text-sm text-gray-500 mt-1">
-                      {selectedLocation.display_name}
+                      {typeof selectedLocation.display_name === 'string' && selectedLocation.display_name.includes(',')
+                        ? selectedLocation.display_name.split(',').slice(1).join(',').trim()
+                        : ''}
                     </span>
                   </div>
                   <button

@@ -760,6 +760,8 @@ useEffect(() => {
           components={{
             DayContent
           }}
+          weekStartsOn={1}
+          locale={es}
         />
       </div>
 

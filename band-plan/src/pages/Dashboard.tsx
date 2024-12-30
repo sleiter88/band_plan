@@ -11,6 +11,8 @@ import DeleteGroupModal from '../components/DeleteGroupModal';
 
 interface GroupWithRole extends Group {
   userRole: 'creator' | 'member' | 'none';
+  principal_count: number;
+  sustituto_count: number;
 }
 
 export default function Dashboard() {
@@ -22,17 +24,17 @@ export default function Dashboard() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const initializeDashboard = async () => {
       if (user) {
-        await checkAdminStatus();
         await fetchGroups();
       }
     };
 
     initializeDashboard();
-  }, [user, isAdmin]);
+  }, [user]);
 
   const fetchGroups = async () => {
     if (!user) return;
@@ -40,8 +42,18 @@ export default function Dashboard() {
     try {
       setLoading(true);
       
-      // Si es admin, obtenemos todos los grupos directamente
-      if (isAdmin) {
+      // Primero obtener el estado de admin actual
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (userError) throw userError;
+      const isUserAdmin = userData?.role === 'admin';
+      setIsAdmin(isUserAdmin);
+
+      if (isUserAdmin) {
         const { data: groupsData, error: groupsError } = await supabase
           .from('groups')
           .select('*')
@@ -49,7 +61,7 @@ export default function Dashboard() {
 
         if (groupsError) throw groupsError;
 
-        // Para admin, necesitamos saber también donde es miembro
+        // Primero obtener los grupos donde el usuario es miembro
         const { data: memberGroups, error: memberError } = await supabase
           .from('group_members')
           .select('group_id')
@@ -59,18 +71,33 @@ export default function Dashboard() {
 
         const memberGroupIds = new Set(memberGroups?.map(g => g.group_id) || []);
 
-        const groupsWithRole = (groupsData || []).map(group => ({
-          ...group,
-          userRole: memberGroupIds.has(group.id)
-            ? 'member'
-            : 'none'
+        // Obtener los miembros de cada grupo por separado
+        const groupsWithCounts = await Promise.all((groupsData || []).map(async (group) => {
+          const { data: principalMembers } = await supabase
+            .from('group_members')
+            .select('id')
+            .eq('group_id', group.id)
+            .eq('role_in_group', 'principal');
+
+          const { data: sustitutoMembers } = await supabase
+            .from('group_members')
+            .select('id')
+            .eq('group_id', group.id)
+            .eq('role_in_group', 'sustituto');
+
+          return {
+            ...group,
+            userRole: memberGroupIds.has(group.id) ? 'member' : 'none',
+            principal_count: principalMembers?.length || 0,
+            sustituto_count: sustitutoMembers?.length || 0
+          };
         }));
 
-        setGroups(groupsWithRole);
+        setGroups(groupsWithCounts);
         return;
       }
 
-      // Para usuarios normales, mantenemos la lógica actual
+      // Para usuarios normales
       const { data: memberGroups, error: memberError } = await supabase
         .from('group_members')
         .select('group_id')
@@ -88,37 +115,35 @@ export default function Dashboard() {
 
       if (groupsError) throw groupsError;
 
-      const groupsWithRole = (groupsData || []).map(group => ({
-        ...group,
-        userRole: memberGroupIds.has(group.id)
-          ? 'member'
-          : 'none'
+      // Obtener los miembros de cada grupo por separado
+      const groupsWithCounts = await Promise.all((groupsData || []).map(async (group) => {
+        const { data: principalMembers } = await supabase
+          .from('group_members')
+          .select('id')
+          .eq('group_id', group.id)
+          .eq('role_in_group', 'principal');
+
+        const { data: sustitutoMembers } = await supabase
+          .from('group_members')
+          .select('id')
+          .eq('group_id', group.id)
+          .eq('role_in_group', 'sustituto');
+
+        return {
+          ...group,
+          userRole: memberGroupIds.has(group.id) ? 'member' : 'none',
+          principal_count: principalMembers?.length || 0,
+          sustituto_count: sustitutoMembers?.length || 0
+        };
       }));
 
-      setGroups(groupsWithRole);
+      setGroups(groupsWithCounts);
     } catch (error) {
       console.error('Error fetching groups:', error);
       toast.error('Error al cargar los grupos');
       setGroups([]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const checkAdminStatus = async () => {
-    if (!user) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-
-      if (error) throw error;
-      setIsAdmin(data?.role === 'admin');
-    } catch (error) {
-      console.error('Error checking admin status:', error);
     }
   };
 
@@ -134,9 +159,17 @@ export default function Dashboard() {
 
   // Función auxiliar para agrupar los grupos por rol
   const groupedGroups = () => {
-    const created = groups.filter(g => g.created_by === user?.id);
-    const member = groups.filter(g => g.userRole === 'member' && g.created_by !== user?.id);
-    const other = isAdmin ? groups.filter(g => g.userRole === 'none' && g.created_by !== user?.id) : [];
+    const filteredGroups = groups.filter(g => 
+      g.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    
+    const created = filteredGroups.filter(g => g.created_by === user?.id);
+    const member = filteredGroups.filter(g => g.userRole === 'member' && g.created_by !== user?.id);
+    const other = isAdmin ? filteredGroups.filter(g => 
+      g.userRole === 'none' && 
+      g.created_by !== user?.id && 
+      !member.some(m => m.id === g.id)
+    ) : [];
     
     return { created, member, other };
   };
@@ -152,6 +185,16 @@ export default function Dashboard() {
           <Plus className="w-5 h-5" />
           <span>Crear Grupo</span>
         </Button>
+      </div>
+
+      <div className="mb-6">
+        <input
+          type="text"
+          placeholder="Buscar grupos..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        />
       </div>
 
       {loading ? (
@@ -271,8 +314,19 @@ const GroupCard = ({ group, user, isAdmin, onDelete, onClick }: GroupCardProps) 
     >
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-xl font-semibold text-gray-900">{group.name}</h3>
-        <div className="flex items-center gap-2">
-          <Users className="w-6 h-6 text-indigo-600" />
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center text-sm text-gray-600" title="Miembros principales">
+              <Users className="w-5 h-5 text-indigo-600 mr-1" />
+              <span className="font-medium">{group.principal_count}</span>
+              <span className="text-xs ml-1">prin</span>
+            </div>
+            <div className="flex items-center text-sm text-gray-600" title="Miembros sustitutos">
+              <Users className="w-5 h-5 text-orange-600 mr-1" />
+              <span className="font-medium">{group.sustituto_count}</span>
+              <span className="text-xs ml-1">sust</span>
+            </div>
+          </div>
           {(isAdmin || group.created_by === user?.id) && (
             <button
               onClick={(e) => onDelete(e, group)}
