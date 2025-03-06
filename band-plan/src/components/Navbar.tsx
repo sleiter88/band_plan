@@ -18,7 +18,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="bg-indigo-600 text-white shadow-lg">
+    <nav className="bg-primary-600 text-white shadow-lg">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center space-x-2">
@@ -33,7 +33,7 @@ export default function Navbar() {
                 <span className="text-sm">{user.email}</span>
                 <button
                   onClick={handleSignOut}
-                  className="flex items-center space-x-1 hover:text-indigo-200 transition-colors"
+                  className="flex items-center space-x-1 hover:text-primary-200 transition-colors"
                 >
                   <LogOut className="h-5 w-5" />
                   <span>Sign Out</span>
@@ -41,15 +41,15 @@ export default function Navbar() {
               </>
             ) : (
               <div className="space-x-4">
-                <Link to="/login" className="hover:text-indigo-200 transition-colors">
+                <Link to="/login" className="hover:text-primary-200 transition-colors">
                   Login
                 </Link>
-                <Link to="/register" className="hover:text-indigo-200 transition-colors">
+                <Link to="/register" className="hover:text-primary-200 transition-colors">
                   Register
                 </Link>
                 <Link 
                   to="/accept-invitation?token=test&member_id=test" 
-                  className="text-sm font-medium text-gray-700 hover:text-gray-900"
+                  className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
                 >
                   Test Invitation
                 </Link>

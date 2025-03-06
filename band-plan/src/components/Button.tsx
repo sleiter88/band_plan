@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
-  variant?: 'primary' | 'secondary';
+  variant?: 'primary' | 'secondary' | 'accent' | 'outline';
   fullWidth?: boolean;
 }
 
@@ -17,8 +17,10 @@ export default function Button({
 }: ButtonProps) {
   const baseStyles = 'flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
   const variantStyles = {
-    primary: 'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500',
-    secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500'
+    primary: 'bg-primary-500 text-white hover:bg-primary-600 focus:ring-primary-400',
+    secondary: 'bg-secondary-500 text-white hover:bg-secondary-600 focus:ring-secondary-400',
+    accent: 'bg-accent-500 text-white hover:bg-accent-600 focus:ring-accent-400',
+    outline: 'bg-white text-primary-500 border border-primary-500 hover:bg-primary-50 focus:ring-primary-400'
   };
   
   return (
