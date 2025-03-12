@@ -18,6 +18,10 @@ export interface GroupMember {
   name: string;
   role_in_group: 'principal' | 'sustituto';
   created_by: string;
+  instruments: { id: string; name: string; }[];
+  sync_calendar?: boolean;
+  calendar_url?: string;
+  calendar_updated_at?: string;
 }
 
 export interface Instrument {

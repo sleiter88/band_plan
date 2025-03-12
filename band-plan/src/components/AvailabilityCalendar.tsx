@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { safeSupabaseRequest } from '../lib/supabaseUtils';
 import { useAuthStore } from '../store/authStore';
 import { DayPicker } from 'react-day-picker';
 import { format, isSameDay } from 'date-fns';
 import { toast } from 'react-hot-toast';
-import { Calendar, Loader2, ChevronDown, Music, Download } from 'lucide-react';
+import { Loader2, ChevronDown, Music, Download } from 'lucide-react';
 import 'react-day-picker/dist/style.css';
 import { GroupMember } from '../types';
 import { useParams } from 'react-router-dom';
@@ -73,40 +73,68 @@ useEffect(() => {
   }, [groupAvailableDates, onAvailableDatesChange]);
 
   const checkAdminStatus = async () => {
-    const userData = await safeSupabaseRequest(
-      () => supabase
-        .from('users')
-        .select('role')
-        .eq('id', user?.id)
-        .single(),
+    interface UserData {
+      role: string;
+    }
+
+    type SupabaseResponse<T> = {
+      data: T;
+      error: any;
+    };
+
+    const response = await safeSupabaseRequest<SupabaseResponse<UserData>>(
+      async () => {
+        const result = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', user?.id)
+          .single();
+        return { data: result.data as UserData, error: result.error };
+      },
       'Error checking admin status'
     );
 
-    if (userData) {
-      setIsAdmin(userData.role === 'admin');
+    if (response?.data) {
+      setIsAdmin(response.data.role === 'admin');
     }
   };
 
   const fetchMemberEvents = async () => {
-    const eventsData = await safeSupabaseRequest(
-      () => supabase
-        .from('events')
-        .select(`
-          id,
-          date,
-          name,
-          group_id,
-          event_members (
-            user_id
-          )
-        `),
+    interface EventData {
+      id: number;
+      date: string;
+      name: string;
+      group_id: string;
+      event_members?: { user_id: string }[];
+    }
+
+    type SupabaseResponse<T> = {
+      data: T;
+      error: any;
+    };
+
+    const response = await safeSupabaseRequest<SupabaseResponse<EventData[]>>(
+      async () => {
+        const result = await supabase
+          .from('events')
+          .select(`
+            id,
+            date,
+            name,
+            group_id,
+            event_members (
+              user_id
+            )
+          `);
+        return { data: result.data as EventData[], error: result.error };
+      },
       'Error al obtener los eventos'
     );
   
-    if (eventsData) {
+    if (response?.data) {
       const formattedEvents: MemberEvent[] = [];
-      eventsData.forEach(event => {
-        event.event_members?.forEach(member => {
+      response.data.forEach((event: EventData) => {
+        event.event_members?.forEach((member: { user_id: string }) => {
           formattedEvents.push({
             event_id: event.id,
             date: event.date,
@@ -122,21 +150,36 @@ useEffect(() => {
   
 
   const fetchGroupEvents = async () => {
-    const eventsData = await safeSupabaseRequest(
-      () => supabase
-        .from('events')
-        .select(`
-          id,
-          date,
-          name,
-          group_id
-        `)
-        .eq('group_id', groupId),
+    interface GroupEventData {
+      id: number;
+      date: string;
+      name: string;
+      group_id: string;
+    }
+
+    type SupabaseResponse<T> = {
+      data: T;
+      error: any;
+    };
+
+    const response = await safeSupabaseRequest<SupabaseResponse<GroupEventData[]>>(
+      async () => {
+        const result = await supabase
+          .from('events')
+          .select(`
+            id,
+            date,
+            name,
+            group_id
+          `)
+          .eq('group_id', groupId);
+        return { data: result.data as GroupEventData[], error: result.error };
+      },
       'Error fetching group events'
     );
 
-    if (eventsData) {
-      const formattedEvents: MemberEvent[] = eventsData.map(event => ({
+    if (response?.data) {
+      const formattedEvents: MemberEvent[] = response.data.map((event: GroupEventData) => ({
         event_id: event.id,
         date: event.date,
         user_id: '', // Este campo ya no es necesario para mostrar eventos
@@ -198,39 +241,49 @@ useEffect(() => {
     
     setLoading(true);
     try {
-      const groupMemberIds = members.filter(m => m.user_id).map(m => m.user_id);
+      const groupMemberIds = members
+        .filter((m): m is GroupMember & { user_id: string } => m.user_id !== null)
+        .map(m => m.user_id);
 
-      const availabilityData = await safeSupabaseRequest(
-        () => supabase
-          .from('member_availability')
-          .select('user_id, date')
-          .in('user_id', groupMemberIds)
-          .order('date'),
+      interface AvailabilityData {
+        user_id: string;
+        date: string;
+      }
+
+      type SupabaseResponse<T> = {
+        data: T;
+        error: any;
+      };
+
+      const response = await safeSupabaseRequest<SupabaseResponse<AvailabilityData[]>>(
+        async () => {
+          const result = await supabase
+            .from('member_availability')
+            .select('user_id, date')
+            .in('user_id', groupMemberIds)
+            .order('date');
+          return { data: result.data as AvailabilityData[], error: result.error };
+        },
         'Error fetching availabilities'
       );
 
-      if (availabilityData) {
-        const memberAvailabilities = new Map<string, Date[]>();
-        availabilityData.forEach(item => {
-          const dates = memberAvailabilities.get(item.user_id) || [];
-          dates.push(new Date(item.date));
-          memberAvailabilities.set(item.user_id, dates);
-        });
-
-        const availArray: MemberAvailability[] = Array.from(memberAvailabilities.entries())
-          .map(([userId, dates]) => {
-            const member = members.find(m => m.user_id === userId);
-            return {
-              userId,
-              memberName: member?.name || 'Unknown Member',
-              dates,
-              instruments: member?.instruments || [],
-              roleInBand: member?.role_in_group || 'principal'
-            };
-          });
-
-        setAvailabilities(availArray);
+      if (response?.data) {
+        const formattedAvailabilities = members
+          .filter((m): m is GroupMember & { user_id: string } => m.user_id !== null)
+          .map(member => ({
+            userId: member.user_id,
+            memberName: member.name || 'Unknown Member',
+            dates: response.data
+              .filter((item: AvailabilityData) => item.user_id === member.user_id)
+              .map((item: AvailabilityData) => new Date(item.date)),
+            instruments: member.instruments || [],
+            roleInBand: member.role_in_group || 'principal'
+          }));
+        setAvailabilities(formattedAvailabilities);
       }
+    } catch (error) {
+      console.error('Error fetching availabilities:', error);
+      toast.error('Error al obtener las disponibilidades');
     } finally {
       setLoading(false);
     }
@@ -287,6 +340,14 @@ useEffect(() => {
     console.log('\n=== INICIO calculateGroupAvailability ===');
     console.log('Members recibidos:', members);
     
+    // Si no hay miembros en el grupo, no hay fechas disponibles
+    if (members.length === 0) {
+      console.log('No hay miembros en el grupo');
+      setGroupAvailableDates([]);
+      setGroupNotAvailableDates([]);
+      return;
+    }
+    
     const allDatesSet = new Set<string>();
     console.log('1. Creando conjunto de fechas...');
     
@@ -296,6 +357,14 @@ useEffect(() => {
     const principalMembers = members.filter(m => m.role_in_group === 'principal');
     console.log('4. Miembros principales encontrados:', principalMembers.length);
     console.log('5. Nombres de principales:', principalMembers.map(m => m.name));
+    
+    // Si no hay miembros principales, no hay fechas disponibles
+    if (principalMembers.length === 0) {
+      console.log('No hay miembros principales en el grupo');
+      setGroupAvailableDates([]);
+      setGroupNotAvailableDates([]);
+      return;
+    }
     
     availabilities.forEach(member => {
       member.dates.forEach(date => {
@@ -417,16 +486,16 @@ useEffect(() => {
     const currentMember = members.find(m => m.user_id === user.id);
     const canManage = isAdmin || 
       currentMember?.role_in_group === 'principal' || 
-      user.id === (selectedMemberId || user.id);
+      user.id === (selectedMemberId ?? user.id);
 
     if (!canManage) {
       toast.error('No tienes permisos para gestionar esta disponibilidad');
       return;
     }
 
-    const userId = selectedMemberId || user.id;
+    const userId = selectedMemberId ?? user.id;
 
-    const hasEventOnDate = memberEvents.some(event => 
+    const hasEventOnDate = memberEvents.some((event: MemberEvent) => 
       event.user_id === userId &&
       isSameDay(new Date(event.date), day)
     );
@@ -449,45 +518,65 @@ useEffect(() => {
         ?.dates.some(d => isSameDay(d, day));
   
       const dateStr = format(day, 'yyyy-MM-dd');
+
+      type SupabaseResponse<T> = {
+        data: T;
+        error: any;
+      };
   
       if (isSelected) {
-        await safeSupabaseRequest(
-          () => supabase
-            .from('member_availability')
-            .delete()
-            .eq('user_id', currentMember.user_id)
-            .eq('date', dateStr),
+        const deleteResponse = await safeSupabaseRequest<SupabaseResponse<null>>(
+          async () => {
+            const result = await supabase
+              .from('member_availability')
+              .delete()
+              .eq('user_id', currentMember.user_id)
+              .eq('date', dateStr);
+            return { data: result.data as null, error: result.error };
+          },
           'Error al actualizar la disponibilidad'
         );
 
-        // Actualizar el estado local sin hacer fetch
-        setAvailabilities(prev => prev.map(avail => {
-          if (avail.userId === currentMember.user_id) {
-            return {
-              ...avail,
-              dates: avail.dates.filter(d => !isSameDay(d, day))
-            };
-          }
-          return avail;
-        }));
+        if (deleteResponse?.data !== null) {
+          // Actualizar el estado local sin hacer fetch
+          setAvailabilities(prev => prev.map(avail => {
+            if (avail.userId === currentMember.user_id) {
+              return {
+                ...avail,
+                dates: avail.dates.filter(d => !isSameDay(d, day))
+              };
+            }
+            return avail;
+          }));
+        }
       } else {
-        await safeSupabaseRequest(
-          () => supabase
-            .from('member_availability')
-            .insert([{ user_id: currentMember.user_id, date: dateStr }]),
+        interface InsertData {
+          user_id: string;
+          date: string;
+        }
+
+        const insertResponse = await safeSupabaseRequest<SupabaseResponse<InsertData[]>>(
+          async () => {
+            const result = await supabase
+              .from('member_availability')
+              .insert([{ user_id: currentMember.user_id, date: dateStr }]);
+            return { data: result.data as InsertData[], error: result.error };
+          },
           'Error al actualizar la disponibilidad'
         );
 
-        // Actualizar el estado local sin hacer fetch
-        setAvailabilities(prev => prev.map(avail => {
-          if (avail.userId === currentMember.user_id) {
-            return {
-              ...avail,
-              dates: [...avail.dates, day]
-            };
-          }
-          return avail;
-        }));
+        if (insertResponse?.data) {
+          // Actualizar el estado local sin hacer fetch
+          setAvailabilities(prev => prev.map(avail => {
+            if (avail.userId === currentMember.user_id) {
+              return {
+                ...avail,
+                dates: [...avail.dates, day]
+              };
+            }
+            return avail;
+          }));
+        }
       }
     } finally {
       setSaving(false);
