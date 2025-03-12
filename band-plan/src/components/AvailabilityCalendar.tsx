@@ -674,8 +674,19 @@ useEffect(() => {
             toast.error('Hubo un problema al guardar, pero intentaremos de nuevo');
           }
           
-          // Recargar todos los datos del calendario sin mostrar notificaciones
-          await refreshCalendarData(true);
+          // Actualizar el estado local sin hacer fetch
+          setAvailabilities(prev => prev.map(avail => {
+            if (avail.userId === currentMember.user_id) {
+              return {
+                ...avail,
+                dates: avail.dates.filter(d => !isSameDay(d, day))
+              };
+            }
+            return avail;
+          }));
+          
+          // Recalcular la disponibilidad del grupo
+          calculateGroupAvailability();
         } catch (error) {
           console.error('Error inesperado al eliminar disponibilidad:', error);
           // No mostramos error al usuario, ya que la fecha probablemente se eliminó
@@ -699,8 +710,19 @@ useEffect(() => {
             toast.error('Hubo un problema al guardar, pero intentaremos de nuevo');
           }
           
-          // Recargar todos los datos del calendario sin mostrar notificaciones
-          await refreshCalendarData(true);
+          // Actualizar el estado local sin hacer fetch
+          setAvailabilities(prev => prev.map(avail => {
+            if (avail.userId === currentMember.user_id) {
+              return {
+                ...avail,
+                dates: [...avail.dates, day]
+              };
+            }
+            return avail;
+          }));
+          
+          // Recalcular la disponibilidad del grupo
+          calculateGroupAvailability();
         } catch (error) {
           console.error('Error inesperado al añadir disponibilidad:', error);
           // No mostramos error al usuario, ya que la fecha probablemente se guardó
