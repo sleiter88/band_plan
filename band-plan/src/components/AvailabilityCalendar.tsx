@@ -69,14 +69,33 @@ export default function AvailabilityCalendar({
     /* Estilos para días seleccionados - con mayor especificidad para garantizar que se apliquen */
     .rdp-day_selected:not([disabled]), 
     .rdp-day_selected:hover:not([disabled]),
-    .rdp-day_selected:focus:not([disabled]),
+    .rdp-day_selected:focus:not([disabled]) { 
+      background-color: #818cf8 !important; /* indigo-400 */
+      color: white !important;
+      font-weight: bold !important;
+    }
+    
+    /* Estilo específico para el día seleccionado en nuestro componente */
     .selected-day:not([disabled]),
     .selected-day:hover:not([disabled]),
     .selected-day:focus:not([disabled]) { 
-      background-color: #4f46e5 !important; 
+      background-color: #818cf8 !important; /* indigo-400 */
       color: white !important;
       font-weight: bold !important;
-      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.5) !important;
+      position: relative;
+    }
+    
+    /* Añadir un borde o indicador visual para el día seleccionado */
+    .selected-day::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      border: 2px solid #4f46e5; /* indigo-600 */
+      border-radius: 50%;
+      pointer-events: none;
     }
     
     /* Estilos para días con eventos externos */
@@ -813,14 +832,14 @@ useEffect(() => {
           isGroupNotAvailable ? 'group-not-available' : ''
         } ${hasEvent ? 'has-event' : ''} ${
           hasMembersWithExternalEvents ? 'has-external-events' : ''
-        } ${selectedDay && isSameDay(date, selectedDay) ? 'selected-day bg-indigo-600 text-white' : ''}`}
+        } ${selectedDay && isSameDay(date, selectedDay) ? 'selected-day' : ''}`}
       >
         <span>{date.getDate()}</span>
         {(isCurrentUserInvolved || otherMembersCount > 0 || hasEvent) && (
           <>
             <div className="availability-dots">
               {isCurrentUserInvolved && (
-                <div className={`availability-dot you ${currentUserHasExternalEvent ? 'border border-orange-500 bg-orange-200' : ''}`} />
+                <div className={`availability-dot you ${currentUserHasExternalEvent ? 'border border-orange-500 bg-orange-200' : ''}`} style={{ boxShadow: '0 0 0 2px rgba(79, 70, 229, 0.3)' }} />
               )}
               {otherMembers.slice(0, 3).map((member, i) => {
                 const hasExternalEvent = memberExternalEvents.some(event => 
@@ -1091,8 +1110,8 @@ useEffect(() => {
         <h3 className="font-medium text-gray-900 mb-3">Legend:</h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="flex items-center space-x-3 p-2 rounded-lg bg-gray-50">
-            <div className="w-4 h-4 rounded-full bg-indigo-600"></div>
-            <span className="text-sm text-gray-600">Your availability</span>
+            <div className="w-4 h-4 rounded-full bg-indigo-600 shadow-sm"></div>
+            <span className="text-sm text-gray-600">Tu disponibilidad</span>
           </div>
           <div className="flex items-center space-x-3 p-2 rounded-lg bg-gray-50">
             <div className="w-4 h-4 rounded-full bg-indigo-200"></div>
@@ -1111,7 +1130,7 @@ useEffect(() => {
             <span className="text-sm text-gray-600">Con evento externo</span>
           </div>
           <div className="flex items-center space-x-3 p-2 rounded-lg bg-gray-50">
-            <div className="w-4 h-4 rounded-full bg-indigo-600 ring-2 ring-indigo-300"></div>
+            <div className="w-4 h-4 rounded-full bg-indigo-400 text-white flex items-center justify-center text-xs font-bold">✓</div>
             <span className="text-sm text-gray-600">Fecha seleccionada</span>
           </div>
         </div>
