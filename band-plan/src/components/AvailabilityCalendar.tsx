@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { safeSupabaseRequest } from '../lib/supabaseUtils';
 import { useAuthStore } from '../store/authStore';
@@ -41,25 +41,29 @@ export default function AvailabilityCalendar({
 }: AvailabilityCalendarProps) {
   // Añadimos estilos CSS para la aplicación
   const dayPickerStyles = `
-    /* Estilos para mantener el calendario estable durante la actualización */
-    body.updating-calendar .rdp,
-    body.updating-calendar .calendar-container {
-      height: auto !important;
-      opacity: 0.7;
-      pointer-events: none;
-    }
-    
-    /* Evitar transiciones durante la actualización */
+    /* Estilos para el calendario */
     .rdp {
       transition: none !important;
     }
     
-    /* Contenedor del calendario con altura mínima para evitar saltos */
+    /* Contenedor del calendario con altura fija para evitar saltos */
     .calendar-container {
-      min-height: 360px;
+      min-height: 380px;
       display: flex;
       justify-content: center;
       align-items: center;
+    }
+    
+    /* Capa de carga */
+    .calendar-loading-overlay {
+      position: absolute;
+      inset: 0;
+      background-color: rgba(255, 255, 255, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      border-radius: 0.5rem;
     }
     
     /* Estilos para días seleccionados - con mayor especificidad para garantizar que se apliquen */
@@ -537,21 +541,28 @@ useEffect(() => {
     return isAdmin || currentMember?.role_in_group === 'principal';
   };
 
-  // Función para actualizar todos los datos del calendario
+  // Estado para controlar si estamos actualizando el calendario
+  const [isUpdatingCalendar, setIsUpdatingCalendar] = useState(false);
+  // Referencia al contenedor del calendario
+  const calendarContainerRef = useRef<HTMLDivElement>(null);
+
+  // Función para actualizar todos los datos del calendario sin recargar la página
   const refreshCalendarData = async (silent = false) => {
     try {
       // Guardar la posición de desplazamiento actual
       const scrollPosition = window.scrollY;
       
-      // Aplicar una clase al contenedor del calendario para mantener su altura
-      document.body.classList.add('updating-calendar');
-      
+      // Mostrar el overlay de carga
       if (!silent) {
         setSaving(true);
-        toast.success('Actualizando calendario...', { id: 'calendar-update' });
+      } else {
+        setIsUpdatingCalendar(true);
       }
       
-      // Realizar todas las operaciones de actualización de datos
+      // Pausar brevemente para permitir que el overlay se muestre
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      // Ejecutar las funciones existentes para cargar datos
       await Promise.all([
         fetchAllAvailabilities(),
         fetchMemberEvents(),
@@ -559,22 +570,16 @@ useEffect(() => {
         fetchMemberExternalEvents()
       ]);
       
+      // Actualizar la disponibilidad del grupo
       calculateGroupAvailability();
       
       // Restaurar la posición de desplazamiento
-      window.scrollTo({
-        top: scrollPosition,
-        behavior: 'auto'
-      });
+      window.scrollTo(0, scrollPosition);
       
+      // Mostrar mensaje de éxito si no es silencioso
       if (!silent) {
-        toast.success('Calendario actualizado', { id: 'calendar-update' });
+        toast.success('Calendario actualizado correctamente');
       }
-      
-      // Quitar la clase después de un breve retraso
-      setTimeout(() => {
-        document.body.classList.remove('updating-calendar');
-      }, 100);
       
       return true;
     } catch (error) {
@@ -584,9 +589,13 @@ useEffect(() => {
       }
       return false;
     } finally {
-      if (!silent) {
-        setSaving(false);
-      }
+      // Ocultar el overlay de carga con un retraso
+      setTimeout(() => {
+        if (!silent) {
+          setSaving(false);
+        }
+        setIsUpdatingCalendar(false);
+      }, 500);
     }
   };
 
@@ -1004,12 +1013,20 @@ useEffect(() => {
       )}
 
       <style dangerouslySetInnerHTML={{ __html: dayPickerStyles }} />
-      <div className="flex justify-center relative bg-white rounded-lg shadow-sm p-4 calendar-container">
-        {saving && (
-          <div className="absolute inset-0 bg-white/50 flex items-center justify-center z-10 rounded-lg">
+      <div 
+        ref={calendarContainerRef}
+        className="flex justify-center relative bg-white rounded-lg shadow-sm p-4 calendar-container" 
+      >
+        <div 
+          className={`fixed top-0 left-0 w-screen h-screen flex items-center justify-center z-50 ${(saving || isUpdatingCalendar) ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
+          style={{ transition: 'opacity 0.2s ease-in-out' }}
+        >
+          <div className="absolute inset-0 bg-black/20"></div>
+          <div className="bg-white p-4 rounded-lg shadow-lg z-10 flex items-center space-x-2">
             <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+            <span>Actualizando calendario...</span>
           </div>
-        )}
+        </div>
         <DayPicker
           mode="single"
           selected={selectedDay}
