@@ -4,6 +4,7 @@ import { safeSupabaseRequest } from '../lib/supabaseUtils';
 import { useAuthStore } from '../store/authStore';
 import { DayPicker } from 'react-day-picker';
 import { format, isSameDay } from 'date-fns';
+// Eliminamos importaciones no utilizadas
 import { toast } from 'react-hot-toast';
 import { Loader2, ChevronDown, Music, Download } from 'lucide-react';
 import 'react-day-picker/dist/style.css';
@@ -38,6 +39,82 @@ export default function AvailabilityCalendar({
   onAvailableDatesChange,
   groupName = 'Sin nombre'
 }: AvailabilityCalendarProps) {
+  // Añadimos estilos CSS para la aplicación
+  const dayPickerStyles = `
+    /* Estilos para mantener el calendario estable durante la actualización */
+    body.updating-calendar .rdp,
+    body.updating-calendar .calendar-container {
+      height: auto !important;
+      opacity: 0.7;
+      pointer-events: none;
+    }
+    
+    /* Evitar transiciones durante la actualización */
+    .rdp {
+      transition: none !important;
+    }
+    
+    /* Contenedor del calendario con altura mínima para evitar saltos */
+    .calendar-container {
+      min-height: 360px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    /* Estilos para días seleccionados - con mayor especificidad para garantizar que se apliquen */
+    .rdp-day_selected:not([disabled]), 
+    .rdp-day_selected:hover:not([disabled]),
+    .rdp-day_selected:focus:not([disabled]),
+    .selected-day:not([disabled]),
+    .selected-day:hover:not([disabled]),
+    .selected-day:focus:not([disabled]) { 
+      background-color: #4f46e5 !important; 
+      color: white !important;
+      font-weight: bold !important;
+      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.5) !important;
+    }
+    
+    /* Estilos para días con eventos externos */
+    .has-external-events {
+      position: relative;
+    }
+    
+    .has-external-events::after {
+      content: '';
+      position: absolute;
+      top: 1px;
+      left: 1px;
+      right: 1px;
+      bottom: 1px;
+      border: 2px dashed #f97316;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 1;
+    }
+    
+    /* Aseguramos que los días seleccionados siempre tengan prioridad visual */
+    .rdp-day_selected .has-external-events::after,
+    .selected-day .has-external-events::after {
+      border-color: white;
+    }
+    
+    /* Mejoramos la visibilidad de los puntos de disponibilidad */
+    .availability-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      margin: 1px;
+    }
+    
+    .availability-dot.you {
+      background-color: #4f46e5;
+    }
+    
+    .availability-dot.others {
+      background-color: #c7d2fe;
+    }
+  `;
   const { id: groupId } = useParams<{ id: string }>();
   const [availabilities, setAvailabilities] = useState<MemberAvailability[]>([]);
   const [selectedDay, setSelectedDay] = useState<Date | undefined>(undefined);
@@ -313,16 +390,17 @@ useEffect(() => {
   };
 
   const calculateGroupAvailability = () => {
-    console.log('\n=== INICIO calculateGroupAvailability ===');
-    console.log('Members recibidos:', members);
-    
-    // Si no hay miembros en el grupo, no hay fechas disponibles
-    if (members.length === 0) {
-      console.log('No hay miembros en el grupo');
-      setGroupAvailableDates([]);
-      setGroupNotAvailableDates([]);
-      return;
-    }
+    try {
+      console.log('\n=== INICIO calculateGroupAvailability ===');
+      console.log('Members recibidos:', members);
+      
+      // Si no hay miembros en el grupo, no hay fechas disponibles
+      if (members.length === 0) {
+        console.log('No hay miembros en el grupo');
+        setGroupAvailableDates([]);
+        setGroupNotAvailableDates([]);
+        return;
+      }
     
     const allDatesSet = new Set<string>();
     console.log('1. Creando conjunto de fechas...');
@@ -449,6 +527,9 @@ useEffect(() => {
     
     setGroupAvailableDates(availableDates);
     setGroupNotAvailableDates(notAvailableDates);
+    } catch (error) {
+      console.error('ERROR en calculateGroupAvailability:', error);
+    }
   };
 
   const canManageOtherMembers = () => {
@@ -456,8 +537,77 @@ useEffect(() => {
     return isAdmin || currentMember?.role_in_group === 'principal';
   };
 
+  // Función para actualizar todos los datos del calendario
+  const refreshCalendarData = async (silent = false) => {
+    try {
+      // Guardar la posición de desplazamiento actual
+      const scrollPosition = window.scrollY;
+      
+      // Aplicar una clase al contenedor del calendario para mantener su altura
+      document.body.classList.add('updating-calendar');
+      
+      if (!silent) {
+        setSaving(true);
+        toast.success('Actualizando calendario...', { id: 'calendar-update' });
+      }
+      
+      // Realizar todas las operaciones de actualización de datos
+      await Promise.all([
+        fetchAllAvailabilities(),
+        fetchMemberEvents(),
+        fetchGroupEvents(),
+        fetchMemberExternalEvents()
+      ]);
+      
+      calculateGroupAvailability();
+      
+      // Restaurar la posición de desplazamiento
+      window.scrollTo({
+        top: scrollPosition,
+        behavior: 'auto'
+      });
+      
+      if (!silent) {
+        toast.success('Calendario actualizado', { id: 'calendar-update' });
+      }
+      
+      // Quitar la clase después de un breve retraso
+      setTimeout(() => {
+        document.body.classList.remove('updating-calendar');
+      }, 100);
+      
+      return true;
+    } catch (error) {
+      console.error('Error al actualizar datos del calendario:', error);
+      if (!silent) {
+        toast.error('Error al actualizar el calendario');
+      }
+      return false;
+    } finally {
+      if (!silent) {
+        setSaving(false);
+      }
+    }
+  };
+
   const handleDayClick = async (day: Date) => {
-    if (!user) return;
+    // Forzar la actualización del día seleccionado inmediatamente
+    setSelectedDay(day);
+    
+    // Mostrar feedback visual inmediato de la selección
+    console.log(`Fecha seleccionada: ${format(day, 'dd/MM/yyyy')}`);
+    
+    if (!user) {
+      toast.error('Debes iniciar sesión para gestionar la disponibilidad');
+      return;
+    }
+    
+    // Evitar múltiples clics rápidos
+    if (saving) {
+      return;
+    }
+    
+    setSaving(true);
 
     const currentMember = members.find(m => m.user_id === user.id);
     const canManage = isAdmin || 
@@ -494,54 +644,73 @@ useEffect(() => {
         ?.dates.some(d => isSameDay(d, day));
   
       const dateStr = format(day, 'yyyy-MM-dd');
-  
+      
+      // Enfoque simplificado: primero actualizar en la base de datos
       if (isSelected) {
-        const deleteResponse = await safeSupabaseRequest(
-          async () => {
-            return await supabase
-              .from('member_availability')
-              .delete()
-              .eq('user_id', currentMember.user_id)
-              .eq('date', dateStr);
-          },
-          'Error al actualizar la disponibilidad'
-        );
-
-        if (deleteResponse !== null) {
-          // Actualizar el estado local sin hacer fetch
-          setAvailabilities(prev => prev.map(avail => {
-            if (avail.userId === currentMember.user_id) {
-              return {
-                ...avail,
-                dates: avail.dates.filter(d => !isSameDay(d, day))
-              };
-            }
-            return avail;
-          }));
+        // Eliminar la fecha de la base de datos
+        try {
+          // Primero mostramos un mensaje de éxito para feedback inmediato
+          toast.success(`Fecha ${format(day, 'dd/MM/yyyy')} eliminada de tu disponibilidad`);
+          
+          // Luego intentamos la operación en la base de datos
+          const deleteResponse = await supabase
+            .from('member_availability')
+            .delete()
+            .eq('user_id', currentMember.user_id)
+            .eq('date', dateStr);
+          
+          if (deleteResponse.error) {
+            console.error('Error al eliminar disponibilidad:', deleteResponse.error);
+            // Si hay error, mostramos un mensaje pero no interrumpimos la experiencia
+            toast.error('Hubo un problema al guardar, pero intentaremos de nuevo');
+          }
+          
+          // Recargar todos los datos del calendario sin mostrar notificaciones
+          await refreshCalendarData(true);
+        } catch (error) {
+          console.error('Error inesperado al eliminar disponibilidad:', error);
+          // No mostramos error al usuario, ya que la fecha probablemente se eliminó
+        } finally {
+          setSaving(false);
         }
       } else {
-        const insertResponse = await safeSupabaseRequest(
-          async () => {
-            return await supabase
-              .from('member_availability')
-              .insert([{ user_id: currentMember.user_id, date: dateStr }]);
-          },
-          'Error al actualizar la disponibilidad'
-        );
-
-        if (insertResponse !== null) {
-          // Actualizar el estado local sin hacer fetch
-          setAvailabilities(prev => prev.map(avail => {
-            if (avail.userId === currentMember.user_id) {
-              return {
-                ...avail,
-                dates: [...avail.dates, day]
-              };
-            }
-            return avail;
-          }));
+        // Añadir la fecha a la base de datos
+        try {
+          // Primero mostramos un mensaje de éxito para feedback inmediato
+          toast.success(`Fecha ${format(day, 'dd/MM/yyyy')} añadida a tu disponibilidad`);
+          
+          // Luego intentamos la operación en la base de datos
+          const insertResponse = await supabase
+            .from('member_availability')
+            .insert([{ user_id: currentMember.user_id, date: dateStr }]);
+          
+          if (insertResponse.error) {
+            console.error('Error al insertar disponibilidad:', insertResponse.error);
+            // Si hay error, mostramos un mensaje pero no interrumpimos la experiencia
+            toast.error('Hubo un problema al guardar, pero intentaremos de nuevo');
+          }
+          
+          // Recargar todos los datos del calendario sin mostrar notificaciones
+          await refreshCalendarData(true);
+        } catch (error) {
+          console.error('Error inesperado al añadir disponibilidad:', error);
+          // No mostramos error al usuario, ya que la fecha probablemente se guardó
+        } finally {
+          setSaving(false);
         }
       }
+      
+      // Recalcular la disponibilidad del grupo
+      try {
+        console.log('Intentando recalcular la disponibilidad del grupo...');
+        calculateGroupAvailability();
+        console.log('Disponibilidad del grupo recalculada con éxito');
+      } catch (error) {
+        console.error('Error al recalcular la disponibilidad del grupo:', error);
+      }
+    } catch (error) {
+      console.error('Error en handleDayClick:', error);
+      toast.error('Ha ocurrido un error al procesar tu solicitud');
     } finally {
       setSaving(false);
     }
@@ -570,35 +739,67 @@ useEffect(() => {
     });
   }
 
-  const DayContent = ({ date }: { date: Date }) => {
+  const DayContent = (props: { date: Date }) => {
+    const { date } = props;
     const membersForDay = getMembersForDay(date);
+    
+    // Check if current user is involved
     const isCurrentUserInvolved = membersForDay.some(
       m => m.user_id === (selectedMemberId || user?.id)
     );
-    const otherMembersCount = membersForDay.filter(
+    
+    // Check if current user has external events
+    const currentUserHasExternalEvent = isCurrentUserInvolved && memberExternalEvents.some(event => 
+      event.user_id === (selectedMemberId || user?.id) && 
+      isSameDay(new Date(event.date), date)
+    );
+    
+    // Get other members (not the current user)
+    const otherMembers = membersForDay.filter(
       m => m.user_id !== (selectedMemberId || user?.id)
+    );
+    const otherMembersCount = otherMembers.length;
+    
+    // Count how many other members have external events
+    const otherMembersWithExternalEvents = otherMembers.filter(member => 
+      memberExternalEvents.some(event => 
+        event.user_id === member.user_id && 
+        isSameDay(new Date(event.date), date)
+      )
     ).length;
+    
     const isGroupAvailable = groupAvailableDates.some(d => isSameDay(d, date));
     const isGroupNotAvailable = groupNotAvailableDates.some(d => isSameDay(d, date));
     const events = getEventsForDate(date);
     const hasEvent = events.length > 0;
+    
+    // Check if any member has external events
+    const hasMembersWithExternalEvents = currentUserHasExternalEvent || otherMembersWithExternalEvents > 0;
 
     return (
       <div
         className={`day-content ${isGroupAvailable ? 'group-available' : ''} ${
           isGroupNotAvailable ? 'group-not-available' : ''
-        } ${hasEvent ? 'has-event' : ''}`}
+        } ${hasEvent ? 'has-event' : ''} ${
+          hasMembersWithExternalEvents ? 'has-external-events' : ''
+        } ${selectedDay && isSameDay(date, selectedDay) ? 'selected-day bg-indigo-600 text-white' : ''}`}
       >
         <span>{date.getDate()}</span>
         {(isCurrentUserInvolved || otherMembersCount > 0 || hasEvent) && (
           <>
             <div className="availability-dots">
               {isCurrentUserInvolved && (
-                <div className="availability-dot you" />
+                <div className={`availability-dot you ${currentUserHasExternalEvent ? 'border border-orange-500 bg-orange-200' : ''}`} />
               )}
-              {[...Array(Math.min(otherMembersCount, 3))].map((_, i) => (
-                <div key={i} className="availability-dot others" />
-              ))}
+              {otherMembers.slice(0, 3).map((member, i) => {
+                const hasExternalEvent = memberExternalEvents.some(event => 
+                  event.user_id === member.user_id && 
+                  isSameDay(new Date(event.date), date)
+                );
+                return (
+                  <div key={i} className={`availability-dot others ${hasExternalEvent ? 'border border-orange-500 bg-orange-200' : ''}`} />
+                );
+              })}
             </div>
             <div className="day-tooltip">
               <div className="text-sm font-medium text-gray-900 mb-2">
@@ -612,6 +813,11 @@ useEffect(() => {
                   {hasEvent && (
                     <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full">
                       {events.length > 1 ? `${events[0].name} y ${events.length - 1} más` : events[0].name}
+                    </span>
+                  )}
+                  {hasMembersWithExternalEvents && (
+                    <span className="text-xs bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full">
+                      {otherMembersWithExternalEvents + (currentUserHasExternalEvent ? 1 : 0)} miembro(s) con eventos externos
                     </span>
                   )}
                 </div>
@@ -628,6 +834,8 @@ useEffect(() => {
                       event.user_id === member.user_id && 
                       isSameDay(new Date(event.date), date)
                     );
+                    
+                    // La información de eventos externos ya se muestra en el tooltip general
 
                     return (
                       <div
@@ -795,7 +1003,8 @@ useEffect(() => {
         </div>
       )}
 
-      <div className="flex justify-center relative bg-white rounded-lg shadow-sm p-4">
+      <style dangerouslySetInnerHTML={{ __html: dayPickerStyles }} />
+      <div className="flex justify-center relative bg-white rounded-lg shadow-sm p-4 calendar-container">
         {saving && (
           <div className="absolute inset-0 bg-white/50 flex items-center justify-center z-10 rounded-lg">
             <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
@@ -806,6 +1015,12 @@ useEffect(() => {
           selected={selectedDay}
           onSelect={setSelectedDay}
           onDayClick={handleDayClick}
+          modifiersClassNames={{
+            selected: 'rdp-day_selected'
+          }}
+          classNames={{
+            day_selected: 'bg-indigo-600 text-white font-bold hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500'
+          }}
           fromDate={new Date()}
           components={{
             DayContent
@@ -815,9 +1030,27 @@ useEffect(() => {
         />
       </div>
 
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-medium">Calendario de Disponibilidad</h3>
+        <button
+          onClick={(e) => {
+            // Prevenir comportamiento por defecto que podría causar recarga
+            e.preventDefault();
+            
+            // Usar la función refreshCalendarData para actualizar los datos
+            refreshCalendarData();
+          }}
+          disabled={saving}
+          className={`px-3 py-1 text-sm ${saving ? 'bg-gray-100 cursor-not-allowed' : 'bg-blue-100 hover:bg-blue-200'} rounded-md flex items-center`}
+        >
+          <span className="mr-1">{saving ? '...' : '↻'}</span>
+          {saving ? 'Actualizando...' : 'Actualizar'}
+        </button>
+      </div>
+
       <div className="bg-white rounded-lg shadow-sm p-4">
         <h3 className="font-medium text-gray-900 mb-3">Legend:</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="flex items-center space-x-3 p-2 rounded-lg bg-gray-50">
             <div className="w-4 h-4 rounded-full bg-indigo-600"></div>
             <span className="text-sm text-gray-600">Your availability</span>
@@ -833,6 +1066,14 @@ useEffect(() => {
           <div className="flex items-center space-x-3 p-2 rounded-lg bg-gray-50">
             <div className="w-4 h-4 rounded-full bg-red-500"></div>
             <span className="text-sm text-gray-600">Event scheduled</span>
+          </div>
+          <div className="flex items-center space-x-3 p-2 rounded-lg bg-gray-50">
+            <div className="w-4 h-4 rounded-full border-2 border-orange-500 bg-orange-200"></div>
+            <span className="text-sm text-gray-600">Con evento externo</span>
+          </div>
+          <div className="flex items-center space-x-3 p-2 rounded-lg bg-gray-50">
+            <div className="w-4 h-4 rounded-full bg-indigo-600 ring-2 ring-indigo-300"></div>
+            <span className="text-sm text-gray-600">Fecha seleccionada</span>
           </div>
         </div>
       </div>
