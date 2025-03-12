@@ -73,29 +73,23 @@ useEffect(() => {
   }, [groupAvailableDates, onAvailableDatesChange]);
 
   const checkAdminStatus = async () => {
-    interface UserData {
+    interface UserRole {
       role: string;
     }
-
-    type SupabaseResponse<T> = {
-      data: T;
-      error: any;
-    };
-
-    const response = await safeSupabaseRequest<SupabaseResponse<UserData>>(
+    
+    const response = await safeSupabaseRequest<UserRole>(
       async () => {
-        const result = await supabase
+        return await supabase
           .from('users')
           .select('role')
           .eq('id', user?.id)
           .single();
-        return { data: result.data as UserData, error: result.error };
       },
       'Error checking admin status'
     );
 
-    if (response?.data) {
-      setIsAdmin(response.data.role === 'admin');
+    if (response) {
+      setIsAdmin(response.role === 'admin');
     }
   };
 
@@ -108,14 +102,9 @@ useEffect(() => {
       event_members?: { user_id: string }[];
     }
 
-    type SupabaseResponse<T> = {
-      data: T;
-      error: any;
-    };
-
-    const response = await safeSupabaseRequest<SupabaseResponse<EventData[]>>(
+    const response = await safeSupabaseRequest(
       async () => {
-        const result = await supabase
+        return await supabase
           .from('events')
           .select(`
             id,
@@ -126,14 +115,13 @@ useEffect(() => {
               user_id
             )
           `);
-        return { data: result.data as EventData[], error: result.error };
       },
       'Error al obtener los eventos'
     );
   
-    if (response?.data) {
+    if (response) {
       const formattedEvents: MemberEvent[] = [];
-      response.data.forEach((event: EventData) => {
+      response.forEach((event: EventData) => {
         event.event_members?.forEach((member: { user_id: string }) => {
           formattedEvents.push({
             event_id: event.id,
@@ -157,14 +145,9 @@ useEffect(() => {
       group_id: string;
     }
 
-    type SupabaseResponse<T> = {
-      data: T;
-      error: any;
-    };
-
-    const response = await safeSupabaseRequest<SupabaseResponse<GroupEventData[]>>(
+    const response = await safeSupabaseRequest(
       async () => {
-        const result = await supabase
+        return await supabase
           .from('events')
           .select(`
             id,
@@ -173,13 +156,12 @@ useEffect(() => {
             group_id
           `)
           .eq('group_id', groupId);
-        return { data: result.data as GroupEventData[], error: result.error };
       },
       'Error fetching group events'
     );
 
-    if (response?.data) {
-      const formattedEvents: MemberEvent[] = response.data.map((event: GroupEventData) => ({
+    if (response) {
+      const formattedEvents: MemberEvent[] = response.map((event: GroupEventData) => ({
         event_id: event.id,
         date: event.date,
         user_id: '', // Este campo ya no es necesario para mostrar eventos
@@ -250,34 +232,28 @@ useEffect(() => {
         date: string;
       }
 
-      type SupabaseResponse<T> = {
-        data: T;
-        error: any;
-      };
-
-      const response = await safeSupabaseRequest<SupabaseResponse<AvailabilityData[]>>(
+      const response = await safeSupabaseRequest(
         async () => {
-          const result = await supabase
+          return await supabase
             .from('member_availability')
             .select('user_id, date')
             .in('user_id', groupMemberIds)
             .order('date');
-          return { data: result.data as AvailabilityData[], error: result.error };
         },
         'Error fetching availabilities'
       );
 
-      if (response?.data) {
+      if (response) {
         const formattedAvailabilities = members
           .filter((m): m is GroupMember & { user_id: string } => m.user_id !== null)
           .map(member => ({
             userId: member.user_id,
             memberName: member.name || 'Unknown Member',
-            dates: response.data
+            dates: response
               .filter((item: AvailabilityData) => item.user_id === member.user_id)
               .map((item: AvailabilityData) => new Date(item.date)),
             instruments: member.instruments || [],
-            roleInBand: member.role_in_group || 'principal'
+            roleInBand: (member.role_in_group as 'principal' | 'sustituto') || 'principal'
           }));
         setAvailabilities(formattedAvailabilities);
       }
@@ -518,26 +494,20 @@ useEffect(() => {
         ?.dates.some(d => isSameDay(d, day));
   
       const dateStr = format(day, 'yyyy-MM-dd');
-
-      type SupabaseResponse<T> = {
-        data: T;
-        error: any;
-      };
   
       if (isSelected) {
-        const deleteResponse = await safeSupabaseRequest<SupabaseResponse<null>>(
+        const deleteResponse = await safeSupabaseRequest(
           async () => {
-            const result = await supabase
+            return await supabase
               .from('member_availability')
               .delete()
               .eq('user_id', currentMember.user_id)
               .eq('date', dateStr);
-            return { data: result.data as null, error: result.error };
           },
           'Error al actualizar la disponibilidad'
         );
 
-        if (deleteResponse?.data !== null) {
+        if (deleteResponse !== null) {
           // Actualizar el estado local sin hacer fetch
           setAvailabilities(prev => prev.map(avail => {
             if (avail.userId === currentMember.user_id) {
@@ -550,22 +520,16 @@ useEffect(() => {
           }));
         }
       } else {
-        interface InsertData {
-          user_id: string;
-          date: string;
-        }
-
-        const insertResponse = await safeSupabaseRequest<SupabaseResponse<InsertData[]>>(
+        const insertResponse = await safeSupabaseRequest(
           async () => {
-            const result = await supabase
+            return await supabase
               .from('member_availability')
               .insert([{ user_id: currentMember.user_id, date: dateStr }]);
-            return { data: result.data as InsertData[], error: result.error };
           },
           'Error al actualizar la disponibilidad'
         );
 
-        if (insertResponse?.data) {
+        if (insertResponse !== null) {
           // Actualizar el estado local sin hacer fetch
           setAvailabilities(prev => prev.map(avail => {
             if (avail.userId === currentMember.user_id) {
@@ -583,11 +547,7 @@ useEffect(() => {
     }
   };
 
-  const getAvailableMembersForDay = (date: Date) => {
-    return members.filter(member => 
-      isMemberAvailableOnDate(member, date)
-    );
-  };
+    // Eliminamos la función no utilizada para evitar warnings
 
   function getMembersForDay(date: Date) {
     return members.filter(member => {
@@ -595,10 +555,11 @@ useEffect(() => {
         .find(a => a.userId === member.user_id)
         ?.dates.some(d => isSameDay(d, date)) ?? false;
 
-      const hasExternalEvent = memberExternalEvents.some(event => 
-        event.user_id === member.user_id && 
-        isSameDay(new Date(event.date), date)
-      );
+      // Verificamos si hay eventos externos (no se usa actualmente pero podría ser útil)
+      // const memberHasExternalEvent = memberExternalEvents.some(event => 
+      //   event.user_id === member.user_id && 
+      //   isSameDay(new Date(event.date), date)
+      // );
 
       const hasGroupEvent = groupEvents.some(event => 
         event.user_id === member.user_id && 
@@ -663,7 +624,7 @@ useEffect(() => {
                       .find(a => a.userId === member.user_id)
                       ?.dates.some(d => isSameDay(d, date)) ?? false;
 
-                    const hasExternalEvent = memberExternalEvents.some(event => 
+                    const memberHasExternalEvent = memberExternalEvents.some(event => 
                       event.user_id === member.user_id && 
                       isSameDay(new Date(event.date), date)
                     );
@@ -679,17 +640,17 @@ useEffect(() => {
                           <div className="flex items-center justify-between w-full">
                             <span className="font-medium">{member.name}</span>
                             <div className="flex items-center gap-2">
-                              {member.role_in_band === 'sustituto' && (
+                              {member.role_in_group === 'sustituto' && (
                                 <span className="text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full">
                                   Sustituto
                                 </span>
                               )}
-                              {isAvailable && !hasExternalEvent && (
+                              {isAvailable && !memberHasExternalEvent && (
                                 <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">
                                   Disponible
                                 </span>
                               )}
-                              {hasExternalEvent && (
+                              {memberHasExternalEvent && (
                                 <span className="text-xs bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full">
                                   Con Evento
                                 </span>
@@ -818,11 +779,11 @@ useEffect(() => {
             <select
               id="member-select"
               value={selectedMemberId || user?.id || ''}
-              onChange={(e) => setSelectedMemberId(e.target.value)}
+              onChange={(e) => setSelectedMemberId(e.target.value === user?.id ? null : e.target.value)}
               className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm"
             >
               {members.map((member) => (
-                <option key={member.id} value={member.user_id}>
+                <option key={member.id} value={member.user_id || ''}>
                   {member.name} {member.user_id === user?.id ? '(Tú)' : ''}
                 </option>
               ))}
